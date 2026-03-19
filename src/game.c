@@ -278,8 +278,11 @@ Skill skill_list[SKILL_COUNT] = {
 
 bool can[SKILL_COUNT] = {0};
 
+bool first_roll;
+
 void game_reset()
 {
+    first_roll = true;
     da_clear(timerlist);
     da_clear(bullet_list);
     da_clear(bullet_die_list);
@@ -332,7 +335,7 @@ int game_init(Camera2D *_cam, RenderTexture2D *_object_texture, RenderTexture2D 
 
     gameover_w = MeasureText("Game Over",40);
     paused_w = MeasureText("Paused",40);
-    press_enter_w = MeasureText("Press ENTER to confirm",20);
+    press_enter_w = MeasureText("Press SPACE to confirm",20);
     game_reset();
     gameover_wait=0;
     gameover=false;
@@ -606,6 +609,18 @@ bool plr_invulnerable;
 
 static int do_playing_mode(float dt)
 {
+    if (first_roll) {
+        first_roll=false;
+        if (!roll_powerup()) {
+            float dx = (float)(plr.body.x - bull.body.x);
+            float dy = (float)(plr.body.y - bull.body.y);
+            bull.body.dx=1.0/(1+dx)*-5000;
+            bull.body.dy=1.0/(1+dy)*-5000;
+            game_mode=GameMode_GUI;
+        }
+        return 0;
+    }
+
     plr_invulnerable = false;
 
     playtime+=dt;
@@ -680,8 +695,8 @@ static int do_playing_mode(float dt)
         bull_track_plr();
         bull.body.dx+=bull_dx*BULL_SPEED*bull_speed_mult*dt;
         bull.body.dy+=bull_dy*BULL_SPEED*bull_speed_mult*dt;
-        body_handle(&bull,NULL,dt);
     }
+    body_handle(&bull,NULL,dt);
 
     sprintf(msg_buf,"%d",score);
     w = MeasureText(msg_buf,40);
@@ -725,7 +740,7 @@ static void player_control(float dt)
     SKILL(SKILL_DASH,&direction);
     SKILL(SKILL_PARRY,NULL);
     SKILL(SKILL_BREAK,NULL);
-    SKILL(SKILL_REVOLVER,NULL);
+    SKILL(SKILL_REVOLVER,&direction);
 
     plr.body.dx+=direction.x*PLR_SPEED*plr_speed_mult*dt;
     plr.body.dy+=direction.y*PLR_SPEED*plr_speed_mult*dt;
@@ -759,7 +774,7 @@ static void gui_card(int x, int y, Vector2 *mouse_pos, int pu_idx, bool selected
     Color color = BLANK;
     if (selected) {
         color = WHITE;
-        if (IsKeyPressed(KEY_ENTER)) {
+        if (IsKeyPressed(KEY_SPACE)) {
             pu->do_effect();
             inventory[pu_idx]=true;
             game_mode=GameMode_PLAYING;
@@ -829,7 +844,7 @@ static int do_gui_mode(float dt)
     gui_card(-375,0,&mouse_pos,card1,current==0);
     gui_card(0,0,&mouse_pos,card2,current==1);
     gui_card(375,0,&mouse_pos,card3,current==2);
-    DrawText("Press ENTER to confirm",center_x-press_enter_w*0.5,center_y+BOX_H_H+30,20,RAYWHITE);
+    DrawText("Press SPACE to confirm",center_x-press_enter_w*0.5,center_y+BOX_H_H+30,20,RAYWHITE);
     // EndTextureMode();
     return 0;
 }
@@ -892,7 +907,7 @@ static void use_parry(void *_data)
 {
     da_append(hblist,((Entity_Hitbox){
         EntityType_HITBOX,
-        plr.body.x,plr.body.y,plr.body.w+5,plr.body.h+5,playtime,0.05,
+        plr.body.x,plr.body.y,plr.body.w+5,plr.body.h+5,playtime,0.1,
         parry_hb_handle,
         parry_hb_draw,
     }));
@@ -1035,6 +1050,11 @@ static void bullet_handle(Entity *bullet, void *_data)
     int *idx = _data;
     emit_dust(25,bullet->body.x,bullet->body.y,5,10,GOLD);
     if (hitbox_aabb(&bullet->hitbox,&bull.hitbox)) {
+        Vector2 swap = {bullet->body.dx, bullet->body.dy};
+        bullet->body.dx=bull.body.dx*bullet->body.elasticity;
+        bullet->body.dy=bull.body.dy*bullet->body.elasticity;
+        bull.body.dx=swap.x*bull.body.elasticity;
+        bull.body.dy=swap.y*bull.body.elasticity;
         bull_stun+=1.0;
         emit_debris(bullet->body.x,bullet->body.y,1000,1000,0.2,15,50,RED);
         da_unordered_remove(bullet_list,*idx);
@@ -1055,14 +1075,24 @@ static void bullet_on_wall_collide(Entity *bullet)
 static void shot_revolver(void *_data)
 {
     shake_cam(0.25,50);
-    Vector2 dv = normalize_vector((rand()/(float)RAND_MAX)*2-1,(rand()/(float)RAND_MAX)*2-1);
+    // (rand()/(float)RAND_MAX)*2-1,(rand()/(float)RAND_MAX)*2-1
+    float angle=((rand()/(float)RAND_MAX)-0.5)*PI*0.2;
+    float cos_d = cosf(angle);
+    float sin_d = sinf(angle);
+
+    Vector2 dv = normalize_vector(-plr.body.dx,-plr.body.dy);
+    // Vector2 *dv = _data;
+
+    plr.body.dx+=-dv.x*10;
+    plr.body.dy+=-dv.y*10;
+
     da_append(bullet_die_list,playtime+2.0);
     da_append(bullet_list,((Entity){
         .body = {
             .type=EntityType_BODY,
             .x=plr.body.x,.y=plr.body.y,
-            .w=10,.h=10,
-            .dx=dv.x*PLR_SPEED*plr_speed_mult*2,.dy=dv.y*PLR_SPEED*plr_speed_mult*2,
+            .w=25,.h=25,
+            .dx=(dv.x * cos_d - dv.y * sin_d)*PLR_SPEED*plr_speed_mult*2,.dy=(dv.x * sin_d + dv.y * cos_d)*PLR_SPEED*plr_speed_mult*2,
             .elasticity=plr.body.elasticity,
             .friction=plr.body.friction,
             .handle=bullet_handle,
@@ -1076,9 +1106,15 @@ static void use_revolver(void *_data)
     shake_cam(0.5,50);
     flash_effect=1.0;
 
+    // Vector2 *dv = malloc(sizeof(Vector2));
+    // dv->x=((Vector2*)_data)->x;
+    // dv->y=((Vector2*)_data)->y;
+
     // for (float i = 0; i < 5; i+=0.1) {
     //     da_append(timerlist,((Timer){playtime+i,NULL,shot_revolver}));
     // }
+    // free(dv);
+    // da_append(timerlist,((Timer){playtime+0.7,dv,free}));
     da_append(timerlist,((Timer){playtime+0.1,NULL,shot_revolver}));
     da_append(timerlist,((Timer){playtime+0.2,NULL,shot_revolver}));
     da_append(timerlist,((Timer){playtime+0.3,NULL,shot_revolver}));
