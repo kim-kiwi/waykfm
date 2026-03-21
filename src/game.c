@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "global.h"
 #include "entities.h"
@@ -184,6 +185,31 @@ Entity_Hitbox *parry_hb = NULL;
 Hitbox_da hblist = {0};
 Particle_da plist = {0};
 Timer_da timerlist = {0};
+
+typedef enum {
+    KIND_POSITION=0b1,
+    KIND_VELOCITY=0b10,
+    KIND_SIZE=0b100,
+    KIND_BORN=0b1000,
+    KIND_LIFESPAN=0b10000,
+    KIND_ELASTICITY=0b100000,
+    KIND_FRICTION=0b1000000,
+} Kind;
+
+#define EntityCap 1024
+typedef uint32_t EntityId;
+Kind    kind_of[EntityCap];
+Vector2 position_of[EntityCap];
+Vector2 velocity_of[EntityCap];
+Vector2 size_of[EntityCap];
+float   born_of[EntityCap];
+float   lifespan_of[EntityCap];
+float   elasticity_of[EntityCap];
+float   friction_of[EntityCap];
+int     append_list[EntityCap];
+int     append_list_size[EntityCap];
+int     delete_list[EntityCap];
+int     delete_list_size[EntityCap];
 
 Entity_da bullet_list = {0};
 double_da bullet_die_list = {0};
@@ -449,7 +475,7 @@ int game_loop(float dt)
         DrawText(msg_buf, center_x+BOX_W_H+10, center_y-BOX_H_H+offset, 30, SKYBLUE);
         offset+=50;
     }
-    
+
     // if (can[SKILL_ENEMY_LASER]) {
     //     sprintf(msg_buf,"LASER: %.2fs",MAX(skill_list[SKILL_ENEMY_LASER].cooldown,0));
     //     DrawText(msg_buf, center_x+BOX_W_H+10, center_y-BOX_H_H+offset, 30, MAROON);
@@ -645,7 +671,7 @@ static int do_playing_mode(float dt)
 
     for (int i = hblist.size-1; i > -1; --i) {
         Entity_Hitbox *hb = &hblist.data[i];
-        
+
         if (hb->handle) hb->handle(hb,dt);
 
         if (playtime-hb->born > hb->die) {
@@ -771,7 +797,7 @@ static void gui_card(int x, int y, Vector2 *mouse_pos, int pu_idx, bool selected
     float wh = (w/2);
     int h = 400;
     float hh = (h/2);
-    
+
     Color color = BLANK;
     if (selected) {
         color = WHITE;
@@ -819,7 +845,7 @@ static int roll_powerup()
     do {
         card1 = rand()%POWERUP_LIST_LEN;
     } while (inventory[card1]==1);
-    
+
     do {
         card2 = rand()%POWERUP_LIST_LEN;
     } while (card1==card2 || inventory[card2]==1);
