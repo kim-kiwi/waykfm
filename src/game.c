@@ -533,8 +533,9 @@ static void bull_track_plr()
 
 static Vector2 normalize_vector(float x, float y)
 {
-    float rdist = Q_rsqrt(x*x+y*y);
-    return (Vector2){x*rdist,y*rdist};
+    // float rdist = Q_rsqrt(x*x+y*y);
+    float dist = sqrtf(x*x+y*y);
+    return dist==0 ? (Vector2){0,0} : (Vector2){x/dist,y/dist};
 }
 
 static void bull_on_wall_collide(Entity *entity)
