@@ -207,7 +207,7 @@ PowerUp powerup_list[] = {
     {"Dash[H]","Dash: dash forward","Enemy Size +20%",powerup_dash},
     {"Parry[J]","Parry: parry enemy's attack","Enemy Speed +25%",powerup_parry},
     {"Break[K]","Break: stop instantly","Your Friction -25%\nYour Speed -25%",powerup_break},
-    {"Revolver[L]","Revolver: shot a bullet","The bullet can also hit you",powerup_revolver},
+    {"Revolver[L]","Revolver: fire six bullets in the reverse of the player's velocity","The bullet can also hit you",powerup_revolver},
     {"Bounce","Your Elasticity +1000%","Enemy Elasticity +500%",powerup_bounce},
     {"Faster!!","Your speed +100%","Enemy Friction -50%",powerup_faster},
     {"Hah?","Size -50%","Your Speed -25%",powerup_hah},

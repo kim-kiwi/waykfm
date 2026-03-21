@@ -24,6 +24,7 @@ C_SRC:=$(foreach dir,$(DIRS),$(wildcard $(dir)/*.c))
 C_HED:=$(foreach dir,$(DIRS),$(wildcard $(dir)/*.h))
 
 OBJ := $(patsubst src/%.c,bin/%.o,$(C_SRC))
+DEPS := $(OBJ:.o=.d)
 
 bin/waykfm: $(OBJ) | bin
 	$(CC) $(OBJ) $(CFLAGS) $(CLIBS) -o $@
@@ -34,3 +35,5 @@ bin/%.o: src/%.c | bin
 
 bin:
 	mkdir bin
+
+-include $(DEPS)

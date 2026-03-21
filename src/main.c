@@ -214,7 +214,7 @@ int main()
             );
 
             BeginBlendMode(BLEND_ADDITIVE);
-            blurrify(&target,1.01);
+            blurrify(&target,0.99);
                 DrawTexturePro(
                     tmpA.texture,
                     (Rectangle) {0, 0, tmpA.texture.width, -tmpA.texture.height},
