@@ -46,6 +46,45 @@
     (list).data[(list).size++]=(value); \
 } while(0)
 
+#define NIL 0
+
+typedef enum {
+    KIND_Position=1 << 1,
+    KIND_Velocity=1 << 2,
+    KIND_Size=1 << 3,
+    KIND_Life=1 << 4,
+    KIND_Elasticity=1 << 5,
+    KIND_Friction=1 << 6,
+    KIND_Color=1 << 7,
+    KIND_Collidable=1 << 8,
+    KIND_StunTime=1 << 9,
+} Kind;
+
+#define KIND_Body (KIND_Position | KIND_Velocity | KIND_Size | KIND_Elasticity | KIND_Friction | KIND_Color)
+
+typedef struct {
+    float born;
+    float die;
+} Life;
+
+#define EntityCap 1024
+typedef uint32_t EntityId;
+typedef uint32_t EntityIdx;
+Kind    kind_of[EntityCap];
+Vector2 position_of[EntityCap];
+Vector2 velocity_of[EntityCap];
+Vector2 size_of[EntityCap];
+Life    life_of[EntityCap];
+float   elasticity_of[EntityCap];
+float   friction_of[EntityCap];
+Color   color_of[EntityCap];
+float   stuntime_of[EntityCap];
+
+EntityIdx entity_idx_size = 1; // 0 is nil id;
+
+int      idx_of[EntityCap];
+EntityId id_of[EntityCap];
+
 typedef struct {
     const char *title;
     const char *advantages;
@@ -126,13 +165,16 @@ static void emit_debris(float x, float y, float vx, float vy, float life, float 
 static void parry_hb_draw(Entity_Hitbox *hb);
 static void enemy_laser_hb_draw(Entity_Hitbox *hb);
 static void bullet_on_wall_collide(Entity *body);
+static inline bool entity_aabb(EntityIdx ent1, EntityIdx ent2);
+void entity_delete(EntityId entity_id); // unordered deletion
+EntityId entity_create(Kind kind);
 
 #define PLR_INIT_X 200
 #define PLR_INIT_Y 200
 Entity plr = {0};
 #define BULL_INIT_X -200
 #define BULL_INIT_Y -200
-Entity bull = {0};
+EntityId bull = NIL;
 
 float Q_rsqrt( float number )
 {
@@ -186,30 +228,36 @@ Hitbox_da hblist = {0};
 Particle_da plist = {0};
 Timer_da timerlist = {0};
 
-typedef enum {
-    KIND_POSITION=0b1,
-    KIND_VELOCITY=0b10,
-    KIND_SIZE=0b100,
-    KIND_BORN=0b1000,
-    KIND_LIFESPAN=0b10000,
-    KIND_ELASTICITY=0b100000,
-    KIND_FRICTION=0b1000000,
-} Kind;
+EntityId entity_id_cnt; // 0 is nil id;
+EntityId entity_create(Kind kind)
+{
+    EntityId new_id = entity_id_cnt++;
+    EntityIdx new_idx = entity_idx_size++;
+    idx_of[new_id] = new_idx;
+    id_of[new_idx] = new_id;
+    kind_of[new_idx] = kind; // new entity has no components
+    return new_id;
+}
 
-#define EntityCap 1024
-typedef uint32_t EntityId;
-Kind    kind_of[EntityCap];
-Vector2 position_of[EntityCap];
-Vector2 velocity_of[EntityCap];
-Vector2 size_of[EntityCap];
-float   born_of[EntityCap];
-float   lifespan_of[EntityCap];
-float   elasticity_of[EntityCap];
-float   friction_of[EntityCap];
-int     append_list[EntityCap];
-int     append_list_size[EntityCap];
-int     delete_list[EntityCap];
-int     delete_list_size[EntityCap];
+void entity_delete(EntityId entity_id) // unordered deletion
+{
+    EntityIdx entity_idx = idx_of[entity_id];
+    EntityIdx last_idx = --entity_idx_size;
+
+    EntityId last_id = id_of[last_idx];
+    idx_of[last_id] = entity_idx;
+    id_of[entity_idx] = last_id;
+
+    kind_of[entity_idx]       = kind_of[last_idx];
+    position_of[entity_idx]   = position_of[last_idx];
+    velocity_of[entity_idx]   = velocity_of[last_idx];
+    size_of[entity_idx]       = size_of[last_idx];
+    life_of[entity_idx]       = life_of[last_idx];
+    elasticity_of[entity_idx] = elasticity_of[last_idx];
+    friction_of[entity_idx]   = friction_of[last_idx];
+    color_of[entity_idx]      = color_of[last_idx];
+    stuntime_of[entity_idx]   = stuntime_of[last_idx];
+}
 
 Entity_da bullet_list = {0};
 double_da bullet_die_list = {0};
@@ -308,6 +356,8 @@ bool first_roll;
 
 void game_reset()
 {
+    EntityId entity_id_cnt = 1;
+    entity_idx_size = 1;
     first_roll = true;
     da_clear(timerlist);
     da_clear(bullet_list);
@@ -329,14 +379,14 @@ void game_reset()
     shaking=0;
     shaking_power=0;
     spread_coin();
-    bull.body = (Entity_Body){
-        .type=EntityType_BODY,
-        .w=50, .h=50,
-        .x=BULL_INIT_X,.y=BULL_INIT_Y,
-        .elasticity = BULL_ELASTICITY,
-        .friction = BULL_FRICTION,
-        .on_wall_collide = bull_on_wall_collide,
-    };
+    bull = entity_create(KIND_Body);
+    position_of[idx_of[bull]].x=BULL_INIT_X;
+    position_of[idx_of[bull]].y=BULL_INIT_Y;
+    color_of[idx_of[bull]]=RED;
+    size_of[idx_of[bull]].x=50;
+    size_of[idx_of[bull]].y=50;
+    elasticity_of[idx_of[bull]]=BULL_ELASTICITY;
+    friction_of[idx_of[bull]]=BULL_FRICTION;
     plr.body = (Entity_Body){
         .type=EntityType_BODY,
         .w=50, .h=50,
@@ -366,8 +416,6 @@ int game_init(Camera2D *_cam, RenderTexture2D *_object_texture, RenderTexture2D 
     gameover_wait=0;
     gameover=false;
     paused=false;
-
-    bull_track_plr();
 
     const char *appDir = GetApplicationDirectory();
     strcpy(filePath, appDir);
@@ -487,11 +535,16 @@ int game_loop(float dt)
     DrawCircle(coin.x+center_x,coin.y+center_y,COIN_HALF,GOLD);
     // DrawRing((Vector2){coin.x+center_x,coin.y+center_y},COIN_HALF-10,COIN_HALF,0,360,64,BLACK);
     if (game_mode!=GameMode_GAMEOVER) body_draw(&plr.body,BLUE);
-    body_draw(&bull.body,RED);
+    // body_draw(&bull.body,RED);
 
-    for (int i = 0; i < bullet_list.size; ++i) {
-        Entity *bullet = &bullet_list.data[i];
-        body_draw(&bullet->body,GOLD);
+    for (EntityIdx i = 1; i < entity_idx_size; ++i) {
+        if (kind_of[i] & (KIND_Position | KIND_Size | KIND_Color)) {
+            Vector2 aligned_pos = {
+                position_of[i].x+center_x-size_of[i].x*0.5,
+                position_of[i].y+center_y-size_of[i].y*0.5
+            };
+            DrawRectangleV(aligned_pos,size_of[i],color_of[i]);
+        }
     }
 
     EndMode2D();
@@ -548,8 +601,9 @@ int game_loop(float dt)
 
 static void bull_track_plr()
 {
-    float dx = (float)(plr.body.x - bull.body.x);
-    float dy = (float)(plr.body.y - bull.body.y);
+    Vector2 *pos = &position_of[idx_of[bull]];
+    float dx = (float)(plr.body.x - pos->x);
+    float dy = (float)(plr.body.y - pos->y);
     float rdist = Q_rsqrt(dx*dx+dy*dy);
     dx*=rdist;
     dy*=rdist;
@@ -639,10 +693,10 @@ static int do_playing_mode(float dt)
     if (first_roll) {
         first_roll=false;
         if (!roll_powerup()) {
-            float dx = (float)(plr.body.x - bull.body.x);
-            float dy = (float)(plr.body.y - bull.body.y);
-            bull.body.dx=1.0/(1+dx)*-5000;
-            bull.body.dy=1.0/(1+dy)*-5000;
+            // float dx = (float)(plr.body.x - bull.body.x);
+            // float dy = (float)(plr.body.y - bull.body.y);
+            // bull.body.dx=1.0/(1+dx)*-5000;
+            // bull.body.dy=1.0/(1+dy)*-5000;
             game_mode=GameMode_GUI;
         }
         return 0;
@@ -652,9 +706,48 @@ static int do_playing_mode(float dt)
 
     playtime+=dt;
 
-    for (int i=bullet_list.size-1; i>-1; --i) {
-        Entity *bullet = &bullet_list.data[i];
-        body_handle(bullet,&i,dt);
+    // for (int i=bullet_list.size-1; i>-1; --i) {
+    //     Entity *bullet = &bullet_list.data[i];
+    //     body_handle(bullet,&i,dt);
+    // }
+    for (EntityIdx i=entity_idx_size-1; i>0; --i) {
+        if (kind_of[i] & (KIND_Position | KIND_Velocity)) {
+            // movement
+            Vector2 *pos = &position_of[i];
+            Vector2 *vel = &velocity_of[i];
+            pos->x+=vel->x*dt;
+            pos->y+=vel->y*dt;
+            vel->x*=powf(friction_of[i],dt);
+            vel->y*=powf(friction_of[i],dt);
+            // collide
+            const float wh = size_of[i].x*0.5;
+            const float hh = size_of[i].y*0.5;
+            if (pos->x+wh>BOX_W_H || pos->x-wh<-BOX_W_H) {
+                pos->x=SIGN(pos->x)*(BOX_W_H-wh);
+                vel->x*=-elasticity_of[i];
+            }
+            if (pos->y+hh>BOX_H_H || pos->y-hh<-BOX_H_H) {
+                pos->y=SIGN(pos->y)*(BOX_H_H-hh);
+                vel->y*=-elasticity_of[i];
+            }
+        }
+        // if (kind_of[i] & (KIND_Collidable)) {
+        //     // for (EntityIdx j=0; j<entity_idx_size; ++j) {
+        //     //     if (kind_of[j] & (KIND_Collidable)) {
+        //     //         if (entity_aabb(i,j)) {
+        //     //             EntityId id = id_of[i];
+        //     //             EntityId jd = id_of[j];
+        //     //             // entity_delete(id);
+        //     //             // entity_delete(jd);
+        //     //         }
+        //     //     }
+        //     // }
+        // }
+        if (kind_of[i] & (KIND_Life)) {
+            if (playtime - life_of[i].born > life_of[i].die) {
+                entity_delete(id_of[i]);
+            }
+        }
     }
 
     for (int i=timerlist.size-1; i>-1; --i) {
@@ -689,11 +782,11 @@ static int do_playing_mode(float dt)
     }
 
     // gameover
-    if (!plr_invulnerable && hitbox_aabb(&plr.hitbox,&bull.hitbox)) {
-        game_mode=GameMode_GAMEOVER;
-        on_gameover();
-        return 1;
-    }
+    // if (!plr_invulnerable && hitbox_aabb(&plr.hitbox,&bull.hitbox)) {
+    //     game_mode=GameMode_GAMEOVER;
+    //     on_gameover();
+    //     return 1;
+    // }
     // get coin
     if (hitbox_aabb(&plr.hitbox,&coin)) {
         spread_coin();
@@ -701,10 +794,10 @@ static int do_playing_mode(float dt)
         write_highscore();
         if (score%5==0) {
             if (!roll_powerup()) {
-                float dx = (float)(plr.body.x - bull.body.x);
-                float dy = (float)(plr.body.y - bull.body.y);
-                bull.body.dx=1.0/(1+dx)*-5000;
-                bull.body.dy=1.0/(1+dy)*-5000;
+                // float dx = (float)(plr.body.x - bull.body.x);
+                // float dy = (float)(plr.body.y - bull.body.y);
+                // bull.body.dx=1.0/(1+dx)*-5000;
+                // bull.body.dy=1.0/(1+dy)*-5000;
                 game_mode=GameMode_GUI;
             }
             return 1;
@@ -719,11 +812,11 @@ static int do_playing_mode(float dt)
 
     if (bull_stun>0) bull_stun-=dt;
     else {
+        Vector2 *vel = &velocity_of[idx_of[bull]];
         bull_track_plr();
-        bull.body.dx+=bull_dx*BULL_SPEED*bull_speed_mult*dt;
-        bull.body.dy+=bull_dy*BULL_SPEED*bull_speed_mult*dt;
+        vel->x+=bull_dx*BULL_SPEED*bull_speed_mult*dt;
+        vel->y+=bull_dy*BULL_SPEED*bull_speed_mult*dt;
     }
-    body_handle(&bull,NULL,dt);
 
     sprintf(msg_buf,"%d",score);
     w = MeasureText(msg_buf,40);
@@ -780,10 +873,10 @@ static void player_control(float dt)
 
     if (IsKeyPressed(KEY_G)) {
         if (!roll_powerup()) {
-            float dx = (float)(plr.body.x - bull.body.x);
-            float dy = (float)(plr.body.y - bull.body.y);
-            bull.body.dx=1.0/(1+dx)*-5000;
-            bull.body.dy=1.0/(1+dy)*-5000;
+            // float dx = (float)(plr.body.x - bull.body.x);
+            // float dy = (float)(plr.body.y - bull.body.y);
+            // bull.body.dx=1.0/(1+dx)*-5000;
+            // bull.body.dy=1.0/(1+dy)*-5000;
             game_mode=GameMode_GUI;
         }
     }
@@ -879,8 +972,8 @@ static int do_gui_mode(float dt)
 static void powerup_dash(void)
 {
     can[SKILL_DASH] = true;
-    bull.body.w*=1.25;
-    bull.body.h*=1.25;
+    // bull.body.w*=1.25;
+    // bull.body.h*=1.25;
 }
 static void powerup_hah(void)
 {
@@ -896,13 +989,13 @@ static void powerup_parry(void)
 static void powerup_bounce(void)
 {
     plr.body.elasticity+=10*PLR_ELASTICITY;
-    bull.body.elasticity+=5*BULL_ELASTICITY;
+    // bull.body.elasticity+=5*BULL_ELASTICITY;
 }
 static void powerup_faster(void)
 {
     plr_speed_mult+=1.0;
     // bull_speed *= 2.0;
-    bull.body.friction *= 1.5;
+    // bull.body.friction *= 1.5;
 }
 static void powerup_break(void)
 {
@@ -949,26 +1042,27 @@ static void use_break(void *_data)
 }
 
 static void use_enemy_laser_delayed(void *_data)
-{
-    shake_cam(0.5,50);
-    emit_debris(bull.body.x,-250,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
-    emit_debris(bull.body.x,250,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
-    emit_debris(-250,bull.body.y,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
-    emit_debris(250,bull.body.y,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
+{}
+// {
+//     shake_cam(0.5,50);
+//     emit_debris(bull.body.x,-250,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
+//     emit_debris(bull.body.x,250,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
+//     emit_debris(-250,bull.body.y,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
+//     emit_debris(250,bull.body.y,GetRandomValue(500,1000),GetRandomValue(500,1000),1.0,10,50,RED);
 
-    da_append(hblist,((Entity_Hitbox){
-        EntityType_HITBOX,
-        bull.body.x,0,bull.body.w,500,playtime,0.75,
-        enemy_laser_hb_handle,
-        enemy_laser_hb_draw,
-    }));
-    da_append(hblist,((Entity_Hitbox){
-        EntityType_HITBOX,
-        0,bull.body.y,500,bull.body.h,playtime,0.75,
-        enemy_laser_hb_handle,
-        enemy_laser_hb_draw,
-    }));
-}
+//     da_append(hblist,((Entity_Hitbox){
+//         EntityType_HITBOX,
+//         bull.body.x,0,bull.body.w,500,playtime,0.75,
+//         enemy_laser_hb_handle,
+//         enemy_laser_hb_draw,
+//     }));
+//     da_append(hblist,((Entity_Hitbox){
+//         EntityType_HITBOX,
+//         0,bull.body.y,500,bull.body.h,playtime,0.75,
+//         enemy_laser_hb_handle,
+//         enemy_laser_hb_draw,
+//     }));
+// }
 
 static void use_enemy_laser(void *_data)
 {
@@ -1009,33 +1103,33 @@ static int parry_hb_handle(Entity_Hitbox *hb, float dt)
     hb->x=plr.body.x;
     hb->y=plr.body.y;
     // parry
-    if (hitbox_aabb(hb,&bull.hitbox)) {
-        float dx = (float)(plr.body.x - bull.body.x);
-        float dy = (float)(plr.body.y - bull.body.y);
-        Vector2 dir = normalize_vector(dx,dy);
-        bull.body.dx=dir.x*-500;
-        bull.body.dy=dir.y*-500;
+    // if (hitbox_aabb(hb,&bull.hitbox)) {
+    //     float dx = (float)(plr.body.x - bull.body.x);
+    //     float dy = (float)(plr.body.y - bull.body.y);
+    //     Vector2 dir = normalize_vector(dx,dy);
+    //     bull.body.dx=dir.x*-500;
+    //     bull.body.dy=dir.y*-500;
 
-        shake_cam(0.2,100.0);
-        skill_list[SKILL_PARRY].cooldown=0;
-        flash_effect=1.0;
+    //     shake_cam(0.2,100.0);
+    //     skill_list[SKILL_PARRY].cooldown=0;
+    //     flash_effect=1.0;
 
-        for (int i = 0; i<100; i++) {
-            Vector2 dv = normalize_vector((rand()/(float)RAND_MAX)*2-1,(rand()/(float)RAND_MAX)*2-1);
-            float ox = (rand()/(float)RAND_MAX)*2-1;
-            float oy = (rand()/(float)RAND_MAX)*2-1;
-            da_append(plist,((Particle){
-                GetTime(),1.0,
-                plr.body.x+ox*20,plr.body.y+oy*20,
-                (Color){255,0,255,255},
-                particle_debris_handle,
-                dv.x*GetRandomValue(500,1000),dv.y*GetRandomValue(500,1000),
-                5,
-                0.2,
-            }));
-        }
-        hb->die=0;
-    }
+    //     for (int i = 0; i<100; i++) {
+    //         Vector2 dv = normalize_vector((rand()/(float)RAND_MAX)*2-1,(rand()/(float)RAND_MAX)*2-1);
+    //         float ox = (rand()/(float)RAND_MAX)*2-1;
+    //         float oy = (rand()/(float)RAND_MAX)*2-1;
+    //         da_append(plist,((Particle){
+    //             GetTime(),1.0,
+    //             plr.body.x+ox*20,plr.body.y+oy*20,
+    //             (Color){255,0,255,255},
+    //             particle_debris_handle,
+    //             dv.x*GetRandomValue(500,1000),dv.y*GetRandomValue(500,1000),
+    //             5,
+    //             0.2,
+    //         }));
+    //     }
+    //     hb->die=0;
+    // }
     return 0;
 }
 
@@ -1072,32 +1166,32 @@ static void emit_dust(int radius, float x, float y, float size, int count, Color
     }
 }
 
-static void bullet_handle(Entity *bullet, void *_data)
-{
-    int *idx = _data;
-    emit_dust(25,bullet->body.x,bullet->body.y,5,10,GOLD);
-    if (hitbox_aabb(&bullet->hitbox,&bull.hitbox)) {
-        Vector2 swap = {bullet->body.dx, bullet->body.dy};
-        bullet->body.dx=bull.body.dx*bullet->body.elasticity;
-        bullet->body.dy=bull.body.dy*bullet->body.elasticity;
-        bull.body.dx=swap.x*bull.body.elasticity;
-        bull.body.dy=swap.y*bull.body.elasticity;
-        bull_stun+=1.0;
-        emit_debris(bullet->body.x,bullet->body.y,1000,1000,0.2,15,50,RED);
-        da_unordered_remove(bullet_list,*idx);
-        da_unordered_remove(bullet_die_list,*idx);
-        return;
-    }
-    if (bullet_die_list.data[*idx]<playtime) {
-        da_unordered_remove(bullet_list,*idx);
-        da_unordered_remove(bullet_die_list,*idx);
-    }
-}
-static void bullet_on_wall_collide(Entity *bullet)
-{
-    shake_cam(0.2,25);
-    emit_debris(bullet->body.x,bullet->body.y,500,500,1.0,5,10,WHITE);
-}
+// static void bullet_handle(Entity *bullet, void *_data)
+// {
+//     int *idx = _data;
+//     emit_dust(25,bullet->body.x,bullet->body.y,5,10,GOLD);
+//     if (hitbox_aabb(&bullet->hitbox,&bull.hitbox)) {
+//         Vector2 swap = {bullet->body.dx, bullet->body.dy};
+//         bullet->body.dx=bull.body.dx*bullet->body.elasticity;
+//         bullet->body.dy=bull.body.dy*bullet->body.elasticity;
+//         bull.body.dx=swap.x*bull.body.elasticity;
+//         bull.body.dy=swap.y*bull.body.elasticity;
+//         bull_stun+=1.0;
+//         emit_debris(bullet->body.x,bullet->body.y,1000,1000,0.2,15,50,RED);
+//         da_unordered_remove(bullet_list,*idx);
+//         da_unordered_remove(bullet_die_list,*idx);
+//         return;
+//     }
+//     if (bullet_die_list.data[*idx]<playtime) {
+//         da_unordered_remove(bullet_list,*idx);
+//         da_unordered_remove(bullet_die_list,*idx);
+//     }
+// }
+// static void bullet_on_wall_collide(Entity *bullet)
+// {
+//     shake_cam(0.2,25);
+//     emit_debris(bullet->body.x,bullet->body.y,500,500,1.0,5,10,WHITE);
+// }
 
 static void shot_revolver(void *_data)
 {
@@ -1113,19 +1207,18 @@ static void shot_revolver(void *_data)
     plr.body.dx+=-dv.x*10;
     plr.body.dy+=-dv.y*10;
 
-    da_append(bullet_die_list,playtime+2.0);
-    da_append(bullet_list,((Entity){
-        .body = {
-            .type=EntityType_BODY,
-            .x=plr.body.x,.y=plr.body.y,
-            .w=25,.h=25,
-            .dx=(dv.x * cos_d - dv.y * sin_d)*PLR_SPEED*plr_speed_mult*2,.dy=(dv.x * sin_d + dv.y * cos_d)*PLR_SPEED*plr_speed_mult*2,
-            .elasticity=plr.body.elasticity,
-            .friction=plr.body.friction,
-            .handle=bullet_handle,
-            .on_wall_collide=bullet_on_wall_collide,
-        }
-    }));
+    EntityIdx bullet = idx_of[entity_create(KIND_Body | KIND_Life | KIND_Collidable | KIND_StunTime)];
+    position_of[bullet]   = (Vector2){plr.body.x,plr.body.y};
+    velocity_of[bullet]   = (Vector2){
+        (dv.x * cos_d - dv.y * sin_d)*PLR_SPEED*plr_speed_mult*2,
+        (dv.x * sin_d + dv.y * cos_d)*PLR_SPEED*plr_speed_mult*2
+    };
+    size_of[bullet]       = (Vector2){25,25};
+    color_of[bullet]      = (Color){GetRandomValue(0,255),GetRandomValue(0,255),GetRandomValue(0,255),255};
+    life_of[bullet]       = (Life){playtime,2.0};
+    elasticity_of[bullet] = plr.body.elasticity;
+    friction_of[bullet]   = plr.body.friction;
+    stuntime_of[bullet]   = 1.0;
 }
 
 static void use_revolver(void *_data)
@@ -1137,15 +1230,25 @@ static void use_revolver(void *_data)
     // dv->x=((Vector2*)_data)->x;
     // dv->y=((Vector2*)_data)->y;
 
-    // for (float i = 0; i < 5; i+=0.1) {
-    //     da_append(timerlist,((Timer){playtime+i,NULL,shot_revolver}));
-    // }
-    // free(dv);
+    for (float i=0; i<6; ++i) {
+        da_append(timerlist,((Timer){playtime+i*0.1,NULL,shot_revolver}));
+    }
     // da_append(timerlist,((Timer){playtime+0.7,dv,free}));
-    da_append(timerlist,((Timer){playtime+0.1,NULL,shot_revolver}));
-    da_append(timerlist,((Timer){playtime+0.2,NULL,shot_revolver}));
-    da_append(timerlist,((Timer){playtime+0.3,NULL,shot_revolver}));
-    da_append(timerlist,((Timer){playtime+0.4,NULL,shot_revolver}));
-    da_append(timerlist,((Timer){playtime+0.5,NULL,shot_revolver}));
-    da_append(timerlist,((Timer){playtime+0.6,NULL,shot_revolver}));
+    // da_append(timerlist,((Timer){playtime+0.1,NULL,shot_revolver}));
+    // da_append(timerlist,((Timer){playtime+0.2,NULL,shot_revolver}));
+    // da_append(timerlist,((Timer){playtime+0.3,NULL,shot_revolver}));
+    // da_append(timerlist,((Timer){playtime+0.4,NULL,shot_revolver}));
+    // da_append(timerlist,((Timer){playtime+0.5,NULL,shot_revolver}));
+    // da_append(timerlist,((Timer){playtime+0.6,NULL,shot_revolver}));
+}
+
+static inline bool entity_aabb(EntityIdx ent1, EntityIdx ent2)
+{
+    float wh1 = size_of[ent1].x*0.5;
+    float hh1 = size_of[ent1].y*0.5;
+    float wh2 = size_of[ent2].x*0.5;
+    float hh2 = size_of[ent2].y*0.5;
+    Vector2 *pos1 = &position_of[ent1];
+    Vector2 *pos2 = &position_of[ent2];
+    return (pos1->x-wh1 <= pos2->x+wh2 && pos1->x+wh1 >= pos2->x-wh2 && pos1->y-hh1 <= pos2->y+hh2 && pos1->y+hh1 >= pos2->y-hh2);
 }
