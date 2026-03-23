@@ -139,7 +139,7 @@ int main()
     camera.zoom = 1.0f;
 
     // SetExitKey(KEY_NULL);
-    // SetTargetFPS(60);
+    // SetTargetFPS(10);
 
     bright_pass = LoadShaderFromMemory(0,brightPassShaderCode);
     blur = LoadShaderFromMemory(0,blurShaderCode);
