@@ -55,30 +55,31 @@
 #define NIL 0
 
 typedef enum {
-    KIND_Position=1 << 0,
-    KIND_Velocity=1 << 1,
-    KIND_Size=1 << 2,
-    KIND_Life=1 << 3,
-    KIND_Elasticity=1 << 4,
-    KIND_Friction=1 << 5,
-    KIND_Color=1 << 6,
-    KIND_Collidable=1 << 7,
-    KIND_StunTime=1 << 8,
-    KIND_Predator=1 << 9,
-    KIND_Prey=1 << 10,
-    KIND_Invulnarability=1 << 11,
+    KIND_Position        = 1 << 0,
+    KIND_Physics         = 1 << 1, // Velocity, Friction, Elasticity
+    KIND_Size            = 1 << 2,
+    KIND_Life            = 1 << 3,
+    KIND_Color           = 1 << 4,
+    KIND_Collidable      = 1 << 5,
+    KIND_StunTime        = 1 << 6,
+    KIND_Predator        = 1 << 7,
+    KIND_Prey            = 1 << 8,
+    KIND_Invulnarability = 1 << 9,
+    KIND_Point           = 1 << 10,
 
     KIND_Last, // = (last thing) + 1
 } Kind;
 
-#define KIND_Body (KIND_Position | KIND_Velocity | KIND_Size | KIND_Elasticity | KIND_Friction | KIND_Color)
+#define KIND_Body (KIND_Position | KIND_Physics | KIND_Size | KIND_Color)
 
 typedef struct {
     float born;
     float die;
 } Life;
 
-#define ENTITY_CAP 1024
+// TODO: 사용 빈도가 적은 컴포넌트들을 하나의 배열로 묶어서 두기..
+
+#define ENTITY_CAP 16384
 typedef uint32_t EntityId;
 typedef uint32_t EntityIdx;
 Kind    kind_of[ENTITY_CAP];
@@ -91,6 +92,7 @@ float   friction_of[ENTITY_CAP];
 Color   color_of[ENTITY_CAP];
 float   stuntime_of[ENTITY_CAP];
 bool    invulnarability_of[ENTITY_CAP];
+int     point_of[ENTITY_CAP];
 
 #define kind_of(entity_id) kind_of[idx_of[(entity_id)]]
 #define position_of(entity_id) position_of[idx_of[(entity_id)]]
@@ -192,7 +194,8 @@ static int enemy_laser_hb_handle(Entity_Hitbox *hb, float dt);
 static void emit_debris(float x, float y, float vx, float vy, float life, float size, int count, Color color);
 static void parry_hb_draw(Entity_Hitbox *hb);
 static void enemy_laser_hb_draw(Entity_Hitbox *hb);
-static void bullet_on_wall_collide(Entity *body);
+static void on_score();
+
 static inline bool entity_aabb(EntityIdx ent1, EntityIdx ent2);
 void entity_delete(EntityId entity_id); // unordered deletion
 EntityId entity_create(Kind kind);
@@ -238,10 +241,10 @@ float shaking_power;
 
 char filePath[1024];
 
-#define COIN_HALF 25
-Entity_Hitbox coin = {
-    .w=COIN_HALF*2,.h=COIN_HALF*2
-};
+// #define COIN_HALF 25
+// Entity_Hitbox coin = {
+//     .w=COIN_HALF*2,.h=COIN_HALF*2
+// };
 
 int card1;
 int card2;
@@ -261,7 +264,8 @@ EntityId entity_create(Kind kind)
     EntityId new_id;
 
     if (new_idx < entity_id_cnt) new_id = id_of[new_idx];
-    else new_id = entity_id_cnt++;
+    else if (entity_id_cnt < ENTITY_CAP) new_id = entity_id_cnt++;
+    else return NIL;
 
     idx_of[new_id] = new_idx;
     id_of[new_idx] = new_id;
@@ -269,7 +273,7 @@ EntityId entity_create(Kind kind)
     return new_id;
 }
 
-static_assert((1 << 11) + 1 == KIND_Last, "You should fix entity_delete() function");
+static_assert((1 << 10) + 1 == KIND_Last, "You should fix entity_delete() function");
 void entity_delete(EntityId entity_id) // unordered deletion
 {
     EntityIdx entity_idx = idx_of[entity_id];
@@ -294,6 +298,7 @@ void entity_delete(EntityId entity_id) // unordered deletion
     color_of[entity_idx]           = color_of[last_idx];
     stuntime_of[entity_idx]        = stuntime_of[last_idx];
     invulnarability_of[entity_idx] = invulnarability_of[last_idx];
+    point_of[entity_idx]           = point_of[last_idx];
 
     kind_of[last_idx]            = 0;
     position_of[last_idx]        = (Vector2){0};
@@ -305,6 +310,7 @@ void entity_delete(EntityId entity_id) // unordered deletion
     color_of[last_idx]           = (Color){0};
     stuntime_of[last_idx]        = 0;
     invulnarability_of[last_idx] = false;
+    point_of[entity_idx]         = 0;
 }
 
 Entity_da bullet_list = {0};
@@ -404,7 +410,7 @@ bool first_roll;
 
 void game_reset()
 {
-    EntityId entity_id_cnt = 1;
+    entity_id_cnt = 1;
     entity_idx_size = 1;
     first_roll = true;
     da_clear(timerlist);
@@ -561,6 +567,11 @@ int game_loop(float dt)
         offset+=50;
     }
 
+    // sprintf(msg_buf,"PLR_VEL: %.2f %.2f",velocity_of(plr).x,velocity_of(plr).y);
+    // DrawText(msg_buf, center_x+BOX_W_H+10, center_y-BOX_H_H+offset, 30, SKYBLUE);
+    // offset+=50;
+
+
     // if (can[SKILL_ENEMY_LASER]) {
     //     sprintf(msg_buf,"LASER: %.2fs",MAX(skill_list[SKILL_ENEMY_LASER].cooldown,0));
     //     DrawText(msg_buf, center_x+BOX_W_H+10, center_y-BOX_H_H+offset, 30, MAROON);
@@ -569,7 +580,7 @@ int game_loop(float dt)
 
     // DrawRectangle(+center_x,coin_y+center_y,COIN_HALF,GOLD);
     // drawing thingy
-    DrawCircle(coin.x+center_x,coin.y+center_y,COIN_HALF,GOLD);
+    // DrawCircle(coin.x+center_x,coin.y+center_y,COIN_HALF,GOLD);
     // DrawRing((Vector2){coin.x+center_x,coin.y+center_y},COIN_HALF-10,COIN_HALF,0,360,64,BLACK);
     // if (game_mode!=GameMode_GAMEOVER) body_draw(&plr.body,BLUE);
     // body_draw(&bull.body,RED);
@@ -662,8 +673,11 @@ static void bull_on_wall_collide(Entity *entity) {}
 
 static void spread_coin()
 {
-    coin.x = GetRandomValue(-(BOX_W_H-BOX_PAD),BOX_W_H-BOX_PAD);
-    coin.y = GetRandomValue(-(BOX_H_H-BOX_PAD),BOX_H_H-BOX_PAD);
+    EntityId coin = entity_create(KIND_Position | KIND_Size | KIND_Color | KIND_Point);
+    position_of(coin).x = GetRandomValue(-(BOX_W_H-BOX_PAD),BOX_W_H-BOX_PAD);
+    position_of(coin).y = GetRandomValue(-(BOX_H_H-BOX_PAD),BOX_H_H-BOX_PAD);
+    size_of(coin) = (Vector2){25,25};
+    color_of(coin) = GOLD;
 }
 
 static void particle_debris_handle(Particle *p, float dt)
@@ -728,12 +742,10 @@ static int do_playing_mode(float dt)
 
     playtime+=dt;
 
-    // for (int i=bullet_list.size-1; i>-1; --i) {
-    //     Entity *bullet = &bullet_list.data[i];
-    //     body_handle(bullet,&i,dt);
-    // }
+    // entity handle
+    da_clear(del_list);
     for (EntityIdx i=entity_idx_size-1; i>0; --i) {
-        if ((kind_of[i] & (KIND_Position | KIND_Velocity)) == (KIND_Position | KIND_Velocity)) {
+        if ((kind_of[i] & (KIND_Position | KIND_Physics)) == (KIND_Position | KIND_Physics)) {
             // movement
             Vector2 *pos = &position_of[i];
             Vector2 *vel = &velocity_of[i];
@@ -745,18 +757,24 @@ static int do_playing_mode(float dt)
             const float wh = size_of[i].x*0.5;
             const float hh = size_of[i].y*0.5;
             if (pos->x+wh>BOX_W_H || pos->x-wh<-BOX_W_H) {
+                if ((kind_of[i] & KIND_Collidable) && vel->x*vel->x > 1) {
+                    shake_cam(0.2,vel->x*0.2);
+                    emit_debris(SIGN(pos->x)*BOX_W_H,pos->y,750,750,1.0,5,10,WHITE);
+                }
                 pos->x=SIGN(pos->x)*(BOX_W_H-wh);
                 vel->x*=-elasticity_of[i];
-
             }
             if (pos->y+hh>BOX_H_H || pos->y-hh<-BOX_H_H) {
+                if ((kind_of[i] & KIND_Collidable) && vel->y*vel->y > 1) {
+                    shake_cam(0.2,vel->y*0.2);
+                    emit_debris(pos->x,SIGN(pos->y)*BOX_H_H,750,750,1.0,5,10,WHITE);
+                }
                 pos->y=SIGN(pos->y)*(BOX_H_H-hh);
                 vel->y*=-elasticity_of[i];
             }
         }
         if ((kind_of[i] & (KIND_Collidable | KIND_Predator)) == (KIND_Collidable | KIND_Predator)) {
             EntityId id = id_of[i];
-            da_clear(del_list);
             for (EntityIdx j=entity_idx_size-1; j>0; --j) {
                 EntityId jd = id_of[j];
                 if (kind_of[j] & (KIND_Collidable | KIND_Prey)) {
@@ -766,14 +784,20 @@ static int do_playing_mode(float dt)
                     }
                 }
             }
-            for (int i = 0; i<del_list.size; ++i) entity_delete(del_list.data[i]);
         }
-        if (kind_of[i] & (KIND_Life)) {
+        if (kind_of[i] & KIND_Life) {
             if (playtime - life_of[i].born > life_of[i].die) {
-                entity_delete(id_of[i]);
+                da_append(del_list,id_of[i]);
+            }
+        }
+        if (kind_of[i] & KIND_Point) {
+            if (entity_aabb(plr,id_of[i])) {
+                da_append(del_list,id_of[i]);
+                on_score();
             }
         }
     }
+    for (int i = 0; i<del_list.size; ++i) entity_delete(del_list.data[i]);
 
     for (int i=timerlist.size-1; i>-1; --i) {
         Timer *t = &timerlist.data[i];
@@ -1128,12 +1152,14 @@ static int parry_hb_handle(Entity_Hitbox *hb, float dt)
 
 static void emit_debris(float x, float y, float vx, float vy, float life, float size, int count, Color color)
 {
+    if (entity_idx_size >= ENTITY_CAP/2) return;
     for (int i = 0; i<count; i++) {
         Vector2 dv = normalize_vector((rand()/(float)RAND_MAX)*2-1,(rand()/(float)RAND_MAX)*2-1);
         float ox = (rand()/(float)RAND_MAX)*2-1;
         float oy = (rand()/(float)RAND_MAX)*2-1;
         EntityId p = entity_create(KIND_Body | KIND_Life);
-        position_of(p) = (Vector2){x+ox*20,y+oy*20};
+        if (p==NIL) break;
+        position_of(p) = (Vector2){x,y};
         velocity_of(p) = (Vector2){dv.x*ox*vx,dv.y*oy*vy};
         size_of(p) = (Vector2){size,size};
         life_of(p) = (Life){playtime,life};
@@ -1243,4 +1269,16 @@ static inline bool entity_aabb(EntityId ent1, EntityId ent2)
     Vector2 *pos1 = &position_of[idx_of[ent1]];
     Vector2 *pos2 = &position_of[idx_of[ent2]];
     return (pos1->x-wh1 <= pos2->x+wh2 && pos1->x+wh1 >= pos2->x-wh2 && pos1->y-hh1 <= pos2->y+hh2 && pos1->y+hh1 >= pos2->y-hh2);
+}
+
+static void on_score()
+{
+    emit_debris(position_of(plr).x,position_of(plr).y,500,500,1,10,20,GOLD);
+    spread_coin();
+    spread_coin();
+    if (++score>highscore) highscore=score;
+    write_highscore();
+    if (score%5==0 && !roll_powerup()) {
+        game_mode=GameMode_GUI;
+    }
 }

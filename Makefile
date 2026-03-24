@@ -33,9 +33,9 @@ bin/%.o: src/%.c | bin
 	@mkdir -p $(dir $@)
 	$(CC) -MMD -MP $(CFLAGS) $(CLIBS) -c $< -o $@
 
-pre: src/%.c | bin
+bin/test: test.c | bin
 	@mkdir -p $(dir $@)
-	$(CC) -E -MMD -MP $(CFLAGS) $(CLIBS) -c $< -o $@
+	$(CC) $< -o $@ $(CFLAGS) $(CLIBS)
 
 bin:
 	mkdir bin
