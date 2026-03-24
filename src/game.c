@@ -26,9 +26,7 @@
 } while(0)
 
 #define da_unordered_remove(list,i) do { \
-    typeof(*(list).data) swap = (list).data[i]; \
     (list).data[i] = (list).data[(list).size-1]; \
-    (list).data[(list).size-1] = swap; \
     da_pop(list); \
 } while(0)
 
@@ -133,7 +131,7 @@ typedef enum {
 typedef struct {
     double trigger_time;
     void *user_data;
-    void (*func)(void *data);
+    void (*func)();
 } Timer;
 
 typedef struct {
@@ -250,7 +248,7 @@ int card2;
 int card3;
 
 Entity_Hitbox *parry_hb = NULL;
-Hitbox_da hblist = {0};
+// Hitbox_da hblist = {0};
 // Particle_da plist = {0};
 Timer_da timerlist = {0};
 EntityId_da del_list = {0};
@@ -412,7 +410,7 @@ void game_reset()
     da_clear(timerlist);
     da_clear(bullet_list);
     da_clear(bullet_die_list);
-    da_clear(hblist);
+    // da_clear(hblist);
     memset(inventory,0,sizeof(inventory));
     for (int i = 0; i<SKILL_COUNT; ++i) {
         skill_list[i].cooldown=0;
@@ -502,11 +500,11 @@ static int write_highscore()
 
 static int on_gameover()
 {
-    da_append(timerlist,((Timer){playtime+1,NULL,game_reset}));
     write_highscore();
     shake_cam(0.5,100.0);
-    emit_debris(position_of(plr).x,position_of(plr).y,1000,1000,1.0,20,100,BLUE);
+    emit_debris(position_of(plr).x,position_of(plr).y,1000,1000,1.0,20,50,BLUE);
     entity_delete(plr);
+    da_append(timerlist,((Timer){playtime+1,NULL,game_reset}));
     return 0;
 }
 
@@ -593,14 +591,10 @@ int game_loop(float dt)
         }
     }
 
-    EndMode2D();
-    EndTextureMode();
-    for (int i = 0; i < hblist.size; ++i) {
-        Entity_Hitbox *hb = &hblist.data[i];
-        hb->draw(hb);
-    }
-    BeginTextureMode(*object_texture);
-    BeginMode2D(*cam);
+    // EndMode2D();
+    // EndTextureMode();
+    // BeginTextureMode(*object_texture);
+    // BeginMode2D(*cam);
 
     DrawFPS(0,0);
 
@@ -784,7 +778,7 @@ static int do_playing_mode(float dt)
     for (int i=timerlist.size-1; i>-1; --i) {
         Timer *t = &timerlist.data[i];
         if (t->trigger_time<playtime) {
-            t->func(t->user_data);
+            t->func();
             da_unordered_remove(timerlist,i);
         }
     }
@@ -1021,16 +1015,16 @@ static void use_dash(void *_data)
     position_of(plr).x+=dir->x*200;
     position_of(plr).y+=dir->y*200;
 }
-static void use_parry(void *_data)
-{
-    da_append(hblist,((Entity_Hitbox){
-        EntityType_HITBOX,
-        position_of(plr).x,position_of(plr).y,size_of(plr).x+5,size_of(plr).x+5,playtime,0.1,
-        parry_hb_handle,
-        parry_hb_draw,
-    }));
-    parry_hb=&hblist.data[hblist.size-1];
-}
+static void use_parry(void *_data){}
+// {
+//     da_append(hblist,((Entity_Hitbox){
+//         EntityType_HITBOX,
+//         position_of(plr).x,position_of(plr).y,size_of(plr).x+5,size_of(plr).x+5,playtime,0.1,
+//         parry_hb_handle,
+//         parry_hb_draw,
+//     }));
+//     parry_hb=&hblist.data[hblist.size-1];
+// }
 
 static void use_break(void *_data)
 {
