@@ -14,6 +14,12 @@ min_f32 :: proc(a, b: f32) -> f32 {
     return b
 }
 
+max_f32 :: proc(a, b: f32) -> f32 {
+    if a < b do return a
+    return b
+}
+
+
 check_aabb_overlap :: proc(a_pos, a_size, b_pos, b_size: vec2) -> (bool, vec2, f32) {
     a_left   := a_pos.x
     a_right  := a_pos.x + a_size.x
@@ -103,7 +109,7 @@ resolve_collision :: proc(world: ^World, a: Entity, b: Entity) {
         return
     }
 
-    e := min_f32(0.5,0.5)
+    e := f32(max(world.elasticities[a],world.elasticities[b]))
 
     j := -(1 + e) * vel_along_normal
     j /= inv_mass_sum
@@ -119,6 +125,8 @@ collision_system :: proc(world: ^World) {
     for e1, pos in world.positions {
         has_vel := e1 in world.velocities
         if !has_vel do continue
+        has_e := e1 in world.elasticities
+        if !has_e do continue
         imass1, has_imass := world.inv_mass[e1]
         if !has_imass do continue
         has_size := e1 in world.sizes
@@ -128,6 +136,8 @@ collision_system :: proc(world: ^World) {
             if e2 <= e1 do continue
             has_vel := e2 in world.velocities
             if !has_vel do continue
+            has_e := e2 in world.elasticities
+            if !has_e do continue
             imass2, has_imass := world.inv_mass[e2]
             if !has_imass || (imass1==0 && imass2==0) do continue
             has_size := e2 in world.sizes
