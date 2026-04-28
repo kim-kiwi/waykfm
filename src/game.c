@@ -491,7 +491,7 @@ int game_loop(float dt)
     }
 
     DrawFPS(0,0);
-    DrawText("v0.1.1", center_x-BOX_W_H, center_y+BOX_H_H+10, 24, RAYWHITE);
+    DrawText("v0.0.2", center_x-BOX_W_H, center_y+BOX_H_H+10, 24, RAYWHITE);
 
     // game logic thingy
     switch (game_mode) {
