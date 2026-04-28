@@ -36,4 +36,7 @@ bin/%.o: src/%.c | bin
 bin:
 	mkdir bin
 
+clean:
+	rm -r bin
+
 -include $(DEPS)

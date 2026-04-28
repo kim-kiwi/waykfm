@@ -279,10 +279,12 @@ Skill skill_list[SKILL_COUNT] = {
 bool can[SKILL_COUNT] = {0};
 
 bool first_roll;
+bool is_fair;
 
 void game_reset()
 {
     first_roll = true;
+    is_fair = true;
     da_clear(timerlist);
     da_clear(bullet_list);
     da_clear(bullet_die_list);
@@ -489,6 +491,7 @@ int game_loop(float dt)
     }
 
     DrawFPS(0,0);
+    DrawText("v0.1.1", center_x-BOX_W_H, center_y+BOX_H_H+10, 24, RAYWHITE);
 
     // game logic thingy
     switch (game_mode) {
@@ -671,7 +674,7 @@ static int do_playing_mode(float dt)
     // get coin
     if (hitbox_aabb(&plr.hitbox,&coin)) {
         spread_coin();
-        if (++score>highscore) highscore=score;
+        if (++score>highscore && is_fair) highscore=score;
         write_highscore();
         if (score%5==0) {
             if (!roll_powerup()) {
@@ -699,7 +702,7 @@ static int do_playing_mode(float dt)
     }
     body_handle(&bull,NULL,dt);
 
-    sprintf(msg_buf,"%d",score);
+    sprintf(msg_buf,is_fair ? "%d" : "%d [Not Fair]",score);
     w = MeasureText(msg_buf,40);
     DrawText(msg_buf, center_x-w*0.5, center_y-300, 40, RAYWHITE);       // Draw text (using default font)
     return 0;
@@ -753,6 +756,7 @@ static void player_control(float dt)
     }
 
     if (IsKeyPressed(KEY_G)) {
+        is_fair=false;
         if (!roll_powerup()) {
             float dx = (float)(plr.body.x - bull.body.x);
             float dy = (float)(plr.body.y - bull.body.y);
@@ -834,7 +838,10 @@ static int roll_powerup()
 static int do_gui_mode(float dt)
 {
     static int current = 0;
-    if (IsKeyPressed(KEY_R)) roll_powerup();
+    if (IsKeyPressed(KEY_R)) {
+        is_fair=false;
+        roll_powerup();
+    }
     if (IsKeyPressed(KEY_A) && current > 0) current--;
     if (IsKeyPressed(KEY_D) && current < 2) current++;
     Vector2 mouse_pos = GetMousePosition();
