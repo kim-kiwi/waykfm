@@ -1,5 +1,18 @@
 package game
 
+PredatorComp :: struct {
+    target: Entity,
+}
+
+CollisionEvent :: struct {
+    a: Entity,
+    b: Entity,
+
+}
+DeletionEvent :: struct {
+    target: Entity,
+}
+
 World :: struct {
     next_entity: Entity,
 
@@ -11,4 +24,9 @@ World :: struct {
     sizes: map[Entity]vec2,
     colors: map[Entity]rgba,
     inputs: map[Entity]bool,
+    predator: map[Entity]PredatorComp,
+    prey: map[Entity]bool,
+
+    collision_events: [dynamic]CollisionEvent,
+    deletion_events: [dynamic]DeletionEvent,
 }
