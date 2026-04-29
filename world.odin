@@ -1,5 +1,7 @@
 package game
 
+import "core:slice/heap"
+
 PredatorComp :: struct {
     target: Entity,
 }
@@ -9,12 +11,30 @@ CollisionEvent :: struct {
     b: Entity,
 
 }
-DeletionEvent :: struct {
+SpawnKind :: enum {
+    Player,
+    Enemy,
+    Square,
+}
+SpawnEvent :: struct {
+    kind: SpawnKind,
+    pos: vec2,
+    size: vec2,
+    vel: vec2,
+    inv_mass: f32,
     target: Entity,
+}
+DeletionEvent :: struct {
+    entity: Entity,
 }
 
 World :: struct {
     next_entity: Entity,
+    entities: map[Entity]bool,
+
+    gameover: bool,
+    gameover_end_at: f64,
+    should_restart: bool,
 
     positions: map[Entity]vec2,
     velocities: map[Entity]vec2,
@@ -23,10 +43,10 @@ World :: struct {
     elasticities: map[Entity]f32,
     sizes: map[Entity]vec2,
     colors: map[Entity]rgba,
-    inputs: map[Entity]bool,
-    predator: map[Entity]PredatorComp,
-    prey: map[Entity]bool,
+    playables: map[Entity]bool,
+    predators: map[Entity]PredatorComp,
 
     collision_events: [dynamic]CollisionEvent,
+    spawn_events: [dynamic]SpawnEvent,
     deletion_events: [dynamic]DeletionEvent,
 }

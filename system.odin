@@ -122,8 +122,9 @@ resolve_collision :: proc(world: ^World, a: Entity, b: Entity) -> (is_hit: bool)
 }
 
 collision_system :: proc(world: ^World) {
-    for e1, pos in world.positions {
-        if !(e1 in world.positions) do continue
+    for e1 in world.entities {
+        has_pos := e1 in world.positions
+        if !has_pos do continue
         has_vel := e1 in world.velocities
         if !has_vel do continue
         has_e := e1 in world.elasticities
@@ -132,10 +133,10 @@ collision_system :: proc(world: ^World) {
         if !has_imass do continue
         has_size := e1 in world.sizes
         if !has_size do continue
-        // rl.DrawText(rl.TextFormat("%f",vel.x),i32(pos.x),i32(pos.y-20),20,rl.RED)
         for e2, pos in world.positions {
             if e2 <= e1 do continue
-            if !(e2 in world.positions) do continue
+            has_pos := e2 in world.positions
+            if !has_pos do continue
             has_vel := e2 in world.velocities
             if !has_vel do continue
             has_e := e2 in world.elasticities
@@ -170,11 +171,11 @@ rigidbody_system :: proc(world: ^World) {
 }
 predator_system :: proc(world: ^World) {
     for ev in world.collision_events {
-        if ev.a in world.predator && world.predator[ev.a].target == ev.b do append(&world.deletion_events, DeletionEvent{target=ev.b})
-        if ev.b in world.predator && world.predator[ev.b].target == ev.a do append(&world.deletion_events, DeletionEvent{target=ev.a})
+        if ev.a in world.predators && world.predators[ev.a].target == ev.b do append(&world.deletion_events, DeletionEvent{ev.b})
+        if ev.b in world.predators && world.predators[ev.b].target == ev.a do append(&world.deletion_events, DeletionEvent{ev.a})
     }
 
-    for e1, predator in world.predator {
+    for e1, predator in world.predators {
         e1pos, has_pos := world.positions[e1]
         if !has_pos do continue
         e1vel, has_vel := world.velocities[e1]
@@ -191,7 +192,7 @@ predator_system :: proc(world: ^World) {
     }
 }
 input_system :: proc(world: ^World) {
-    for e, input in world.inputs {
+    for e, input in world.playables {
         vel, has_vel := world.velocities[e]
         if !has_vel do continue
         movement: vec2
@@ -221,13 +222,41 @@ render_system :: proc(world: ^World) {
     }
 }
 
+gameover_system :: proc(world: ^World) {
+    for ev in world.deletion_events {
+        if ev.entity in world.playables {
+            world.gameover=true
+            world.gameover_end_at=rl.GetTime()
+        }
+    }
+    if world.gameover {
+        if rl.GetTime() - world.gameover_end_at > 1 {
+            world.should_restart=true
+        }
+    }
+}
+
+spawn_system :: proc(world: ^World) {
+    for ev in world.spawn_events {
+        switch ev.kind {
+        case .Player:
+            spawn_player(world)
+        case .Enemy:
+            spawn_enemy(world,ev.target)
+        case .Square:
+            spawn_square(world,ev.pos,ev.size,ev.vel,ev.inv_mass)
+        }
+    }
+}
+
 deletion_system :: proc(world: ^World) {
     for ev in world.deletion_events {
-        entity_delete(world,ev.target)
+        entity_delete(world,ev.entity)
     }
 }
 
 clear_system :: proc(world: ^World) {
     clear(&world.collision_events)
+    clear(&world.spawn_events)
     clear(&world.deletion_events)
 }
