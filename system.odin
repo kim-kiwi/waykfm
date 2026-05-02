@@ -1,6 +1,7 @@
 package game
 
 import "core:math"
+import "core:math/rand"
 import rl "vendor:raylib"
 import "core:fmt"
 
@@ -132,8 +133,11 @@ resolve_collision :: proc(world: ^World, a: Entity, b: Entity, normal: vec2) {
     return
 }
 
+// TODO: 충돌 두 번 감지되는 버그 있음
 overlap_resolution_system :: proc(world: ^World) {
-    for e1 in world.positions {
+    for e1 in world.collidables {
+        has_pos := e1 in world.positions
+        if !has_pos do continue
         has_vel := e1 in world.velocities
         if !has_vel do continue
         has_e := e1 in world.elasticities
@@ -143,6 +147,8 @@ overlap_resolution_system :: proc(world: ^World) {
         has_size := e1 in world.sizes
         if !has_size do continue
         for e2 in world.positions {
+            has_pos := e2 in world.positions
+            if !has_pos do continue
             if e2 == e1 do continue
             has_vel := e2 in world.velocities
             if !has_vel do continue
@@ -188,6 +194,12 @@ collision_resolution_system :: proc(world: ^World) {
 //         }
 //     }
 // }
+
+lifetime_system :: proc(world: ^World) {
+    for e, lt in world.lifetimes {
+        if rl.GetTime()-lt.born_at>=lt.duration do append(&world.deletion_events, DeletionEvent{e})
+    }
+}
 
 debug_system :: proc(world: ^World) {
     // fmt.println("====================")
@@ -258,17 +270,24 @@ rigidbody_system :: proc(world: ^World) {
         dt := rl.GetFrameTime()
 
         pos+=vel*dt
-        vel*=math.pow(1-friction,rl.GetFrameTime())
+        gravity, has_gravity := world.gravities[e]
+        if has_gravity {
+            vel.y += gravity*dt
+            // vel.x*=math.pow(1-friction,rl.GetFrameTime())
+            // vel.y*=math.pow(1-friction*0.1,rl.GetFrameTime())
+        } else {
+            vel*=math.pow(1-friction,rl.GetFrameTime())
+        }
 
         world.positions[e]=pos
         world.velocities[e]=vel
     }
 }
 predator_system :: proc(world: ^World) {
-    // for ev in world.collision_events {
-    //     if ev.a in world.predators && world.predators[ev.a].target == ev.b do append(&world.deletion_events, DeletionEvent{ev.b})
-    //     if ev.b in world.predators && world.predators[ev.b].target == ev.a do append(&world.deletion_events, DeletionEvent{ev.a})
-    // }
+    for ev in world.collision_events {
+        if ev.a in world.predators && world.predators[ev.a].target == ev.b do append(&world.deletion_events, DeletionEvent{ev.b})
+        if ev.b in world.predators && world.predators[ev.b].target == ev.a do append(&world.deletion_events, DeletionEvent{ev.a})
+    }
 
     for e1, predator in world.predators {
         e1pos, has_pos := world.positions[e1]
@@ -320,6 +339,17 @@ render_system :: proc(world: ^World) {
 gameover_system :: proc(world: ^World) {
     for ev in world.deletion_events {
         if ev.entity in world.playables {
+            pos, has_pos := world.positions[ev.entity]
+            size, has_size := world.sizes[ev.entity]
+            color, has_color := world.colors[ev.entity]
+            if has_pos && has_size && has_color {
+                for _ in 0..<100 {
+                    dir: vec2 = rl.Vector2Normalize({cast(f32)rl.GetRandomValue(-100,100),cast(f32)rl.GetRandomValue(-100,100)})
+                    spread := vec2{size.x*rand.float32(),size.y*rand.float32()}
+                    spawn_debris(world, pos+spread, {10,10}, dir*cast(f32)rl.GetRandomValue(0,1000), color, cast(f32)rl.GetRandomValue(1000,2000))
+                }
+            }
+
             world.gameover=true
             world.gameover_end_at=rl.GetTime()
         }

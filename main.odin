@@ -10,16 +10,17 @@ enemy: Entity
 init :: proc() {
     plr = spawn_player(&world)
     // fmt.printfln("plr=%d, entity=%d",plr,enemy)
-    for _ in 0..<100 {
-        enemy = spawn_enemy(&world,plr)
-    }
+    // for _ in 0..<100 {
+    enemy = spawn_enemy(&world,plr)
+    // }
 
     // enemy = spawn_enemy(&world,0)
 
-    spawn_square(&world, {-250,-250}, {10,500}, {0,0}, 0.0)
-    spawn_square(&world, {-250,-250}, {500,10}, {0,0}, 0.0)
-    spawn_square(&world, {240,-250}, {10,500}, {0,0}, 0.0)
-    spawn_square(&world, {-250,240}, {500,10}, {0,0}, 0.0)
+    WIDTH :: 10
+    spawn_square(&world, {-250-WIDTH,-250}, {WIDTH,500}, {0,0}, 0.0)
+    spawn_square(&world, {-250-WIDTH,-250-WIDTH}, {500+WIDTH*2,WIDTH}, {0,0}, 0.0)
+    spawn_square(&world, {250,-250}, {WIDTH,500}, {0,0}, 0.0)
+    spawn_square(&world, {-250-WIDTH,250}, {500+WIDTH*2,WIDTH}, {0,0}, 0.0)
 }
 
 restart :: proc() {
@@ -31,21 +32,27 @@ restart :: proc() {
         entity_delete(&world,e)
     }
     plr = spawn_player(&world)
-    for _ in 0..<100 {
+    // for _ in 0..<100 {
         enemy = spawn_enemy(&world,plr)
-    }
+    // }
     world.gameover=false
     world.should_restart=false
 }
 
 loop :: proc() {
+    // for _ in 0..<1 {
+    // }
+
+
     clear_system(&world)
     input_system(&world)
 
-    // debug_system(&world)
     overlap_resolution_system(&world)
+    // debug_system(&world)
     rigidbody_system(&world)
     collision_resolution_system(&world)
+
+    lifetime_system(&world)
 
     predator_system(&world)
     gameover_system(&world)

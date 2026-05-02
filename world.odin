@@ -27,6 +27,10 @@ SpawnEvent :: struct {
 DeletionEvent :: struct {
     entity: Entity,
 }
+LifeTime :: struct {
+    born_at: f64,
+    duration: f64,
+}
 
 World :: struct {
     next_entity: Entity,
@@ -41,10 +45,15 @@ World :: struct {
     inv_mass: map[Entity]f32,
     frictions: map[Entity]f32,
     elasticities: map[Entity]f32,
+
     sizes: map[Entity]vec2,
     colors: map[Entity]rgba,
     playables: map[Entity]bool,
     predators: map[Entity]PredatorComp,
+    gravities: map[Entity]f32,
+
+    collidables: map[Entity]bool,
+    lifetimes: map[Entity]LifeTime,
 
     collision_events: [dynamic]CollisionEvent,
     spawn_events: [dynamic]SpawnEvent,
