@@ -14,11 +14,11 @@ spawn_square :: proc(world: ^World, pos, size: vec2, vel: vec2 = {0,0}, inv_mass
 
 spawn_player :: proc(world: ^World) -> Entity{
     plr = entity_create(world)
-    world.positions[plr] = {185, 185}
+    world.positions[plr] = {95,95}
     world.velocities[plr] = {0,0}
     world.elasticities[plr] = 0.5
     world.frictions[plr] = 0.1
-    world.inv_mass[plr] = 1.0
+    world.inv_mass[plr] = 1.0/1000.0
     world.sizes[plr] = {50,50}
     world.colors[plr] = {255,255,255,255}
     world.playables[plr] = true
@@ -28,8 +28,8 @@ spawn_player :: proc(world: ^World) -> Entity{
 spawn_enemy :: proc(world: ^World, plr: Entity) -> Entity {
     enemy = entity_create(world)
     // world.positions[enemy] = {-240,-240}
-    world.positions[enemy] = {0,0}
-    world.velocities[enemy] = {0,0}
+    world.positions[enemy] = {-100,-100}
+    world.velocities[enemy] = {100,100}
     world.elasticities[enemy] = 0.5
     world.frictions[enemy] = 0.1
     world.inv_mass[enemy] = 1

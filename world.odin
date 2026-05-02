@@ -9,7 +9,7 @@ PredatorComp :: struct {
 CollisionEvent :: struct {
     a: Entity,
     b: Entity,
-
+    normal: vec2,
 }
 SpawnKind :: enum {
     Player,

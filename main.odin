@@ -9,6 +9,7 @@ enemy: Entity
 
 init :: proc() {
     plr = spawn_player(&world)
+    // fmt.printfln("plr=%d, entity=%d",plr,enemy)
     for _ in 0..<100 {
         enemy = spawn_enemy(&world,plr)
     }
@@ -40,21 +41,31 @@ restart :: proc() {
 loop :: proc() {
     clear_system(&world)
     input_system(&world)
+
+    // debug_system(&world)
+    overlap_resolution_system(&world)
     rigidbody_system(&world)
-    collision_system(&world)
+    collision_resolution_system(&world)
+
     predator_system(&world)
     gameover_system(&world)
+
     rl.BeginDrawing()
     rl.ClearBackground({24,24,24,255})
     render_system(&world)
     rl.DrawFPS(0,0)
     rl.EndDrawing()
+
     deletion_system(&world)
     if world.should_restart do restart()
+
 }
 
 main :: proc() {
+    rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(500,500,"W.A.Y.K.F.M.")
+    rl.MaximizeWindow()
+    // rl.SetTargetFPS(10)
     defer rl.CloseWindow()
     init()
     for !rl.WindowShouldClose() {
