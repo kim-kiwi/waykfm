@@ -49,8 +49,8 @@ spawn_player :: proc(world: ^World) -> Entity{
     plr := entity_create(world)
     world.positions[plr] = {200,200}
     world.velocities[plr] = {0,0}
-    world.elasticities[plr] = 0.5
-    world.frictions[plr] = 0.1
+    world.elasticities[plr] = 0.1
+    world.frictions[plr] = 0.2
     world.inv_mass[plr] = 1.0/(1.0) // 1/mass
     world.sizes[plr] = {50,50}
     world.colors[plr] = {255,255,255,255}
@@ -64,7 +64,7 @@ spawn_enemy :: proc(world: ^World, plr: Entity) -> Entity {
     // world.positions[enemy] = {-240,-240}
     world.positions[enemy] = {-250,-250}
     world.velocities[enemy] = {100,100}
-    world.elasticities[enemy] = 0.5
+    world.elasticities[enemy] = 0.1
     world.frictions[enemy] = 0.1
     world.inv_mass[enemy] = 1.0/(1.0) // 1/mass
     world.sizes[enemy] = {50,50}

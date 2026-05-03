@@ -15,7 +15,7 @@ init :: proc() {
     spawn_square(&world, {250,-250}, {WALL_WIDTH,500}, {0,0}, 0.0)
     spawn_square(&world, {-250-WALL_WIDTH,250}, {500+WALL_WIDTH*2,WALL_WIDTH}, {0,0}, 0.0)
 
-    spawn_coin(&world, {cast(f32)rl.GetRandomValue(-250,250),cast(f32)rl.GetRandomValue(-250,250)})
+    spawn_coin(&world, {cast(f32)rl.GetRandomValue(-245,220),cast(f32)rl.GetRandomValue(-245,220)})
 }
 
 restart :: proc() {
@@ -35,7 +35,7 @@ restart :: proc() {
     spawn_square(&world, {250,-250}, {WALL_WIDTH,500}, {0,0}, 0.0)
     spawn_square(&world, {-250-WALL_WIDTH,250}, {500+WALL_WIDTH*2,WALL_WIDTH}, {0,0}, 0.0)
 
-    spawn_coin(&world, {cast(f32)rl.GetRandomValue(-250,250),cast(f32)rl.GetRandomValue(-250,250)})
+    spawn_coin(&world, {cast(f32)rl.GetRandomValue(-245,220),cast(f32)rl.GetRandomValue(-245,220)})
 }
 
 loop :: proc() {

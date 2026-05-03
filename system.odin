@@ -200,7 +200,7 @@ point_system :: proc(world: ^World) {
         if ev.kind != .ENTER do continue
         if ev.entity in world.playables && ev.area in world.points {
             append(&world.deletion_events, DeletionEvent{ev.area})
-            append(&world.spawn_events, SpawnEvent{kind=.Coin, pos={cast(f32)rl.GetRandomValue(-220,220),cast(f32)rl.GetRandomValue(-220,220)}})
+            append(&world.spawn_events, SpawnEvent{kind=.Coin, pos={cast(f32)rl.GetRandomValue(-245,220),cast(f32)rl.GetRandomValue(-245,220)}})
             world.point += 1
         }
     }
@@ -282,13 +282,8 @@ rigidbody_system :: proc(world: ^World) {
 
         pos+=vel*dt
         gravity, has_gravity := world.gravities[e]
-        if has_gravity {
-            vel.y += gravity*dt
-            // vel.x*=math.pow(1-friction,rl.GetFrameTime())
-            // vel.y*=math.pow(1-friction*0.1,rl.GetFrameTime())
-        } else {
-            vel*=math.pow(1-friction,rl.GetFrameTime())
-        }
+        if has_gravity do vel.y += gravity*dt
+        else do vel*=math.pow(1-friction,rl.GetFrameTime())
 
         world.positions[e]=pos
         world.velocities[e]=vel
@@ -311,7 +306,7 @@ predator_system :: proc(world: ^World) {
         if !e2has_pos do continue
         e2vel, e2has_vel := world.velocities[e2]
         if !e2has_vel do continue
-        e1vel += rl.Vector2Normalize(e2pos-e1pos)*200*rl.GetFrameTime()
+        e1vel += rl.Vector2Normalize(e2pos-e1pos)*250*rl.GetFrameTime()
 
         world.velocities[e1] = e1vel
     }
@@ -330,6 +325,10 @@ input_system :: proc(world: ^World) {
         world.velocities[e] = vel
     }
 }
+
+// gui_system :: proc(world: ^World) {
+
+// }
 
 render_system :: proc(world: ^World) {
     center := vec2{f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)}
@@ -355,7 +354,7 @@ gameover_system :: proc(world: ^World) {
                 for _ in 0..<100 {
                     dir: vec2 = rl.Vector2Normalize({cast(f32)rl.GetRandomValue(-100,100),cast(f32)rl.GetRandomValue(-100,100)})
                     spread := vec2{size.x*rand.float32(),size.y*rand.float32()}
-                    spawn_debris(world, pos+spread, {10,10}, dir*cast(f32)rl.GetRandomValue(0,1000), color, cast(f32)rl.GetRandomValue(1000,2000))
+                    spawn_debris(world, pos+spread, {5,5}, dir*cast(f32)rl.GetRandomValue(0,1000), color, cast(f32)rl.GetRandomValue(1000,2000))
                 }
             }
 
@@ -384,13 +383,11 @@ spawn_system :: proc(world: ^World) {
         }
     }
 }
-
 deletion_system :: proc(world: ^World) {
     for ev in world.deletion_events {
         entity_delete(world,ev.entity)
     }
 }
-
 clear_system :: proc(world: ^World) {
     clear(&world.collision_events)
     clear(&world.spawn_events)
