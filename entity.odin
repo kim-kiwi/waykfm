@@ -31,4 +31,6 @@ entity_delete :: proc(world: ^World, e: Entity) {
 
     delete_key(&world.collidables,e)
     delete_key(&world.lifetimes,e)
+    delete_key(&world.areas,e)
+    delete_key(&world.points,e)
 }

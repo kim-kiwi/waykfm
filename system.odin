@@ -109,10 +109,7 @@ resolve_collision :: proc(world: ^World, a: Entity, b: Entity, normal: vec2) {
     }
 
     // 2. 속도 보정
-    rv := world.velocities[a]-world.velocities[b] /* vec2{
-        world.velocities[b].x - world.velocities[a].x,
-        world.velocities[b].y - world.velocities[a].y,
-    } */
+    rv := world.velocities[a]-world.velocities[b]
 
     vel_along_normal := rv.x * normal.x + rv.y * normal.y
 
@@ -146,10 +143,10 @@ overlap_resolution_system :: proc(world: ^World) {
         if !has_imass do continue
         has_size := e1 in world.sizes
         if !has_size do continue
-        for e2 in world.positions {
+        for e2 in world.collidables {
+            if e2 == e1 do continue
             has_pos := e2 in world.positions
             if !has_pos do continue
-            if e2 == e1 do continue
             has_vel := e2 in world.velocities
             if !has_vel do continue
             has_e := e2 in world.elasticities
@@ -165,35 +162,49 @@ overlap_resolution_system :: proc(world: ^World) {
     }
 }
 
+area_system :: proc(world: ^World) {
+    for e1 in world.positions {
+        has_pos := e1 in world.positions
+        if !has_pos do continue
+        has_size := e1 in world.sizes
+        if !has_size do continue
+        for e2, &area in world.areas {
+            if e2 == e1 do continue
+            has_pos := e2 in world.positions
+            if !has_pos do continue
+            has_size := e2 in world.sizes
+            if !has_size do continue
+
+            hit, normal, penetration := check_aabb_overlap(world.positions[e1], world.sizes[e1], world.positions[e2]+area.min, area.max-area.min)
+            if hit {
+                if !(e1 in area.hit) {
+                    area.hit[e1]=true
+                    append(&world.area_events,AreaEvent{kind=.ENTER, area=e2, entity=e1})
+                }
+            } else if e1 in area.hit {
+                delete_key(&area.hit, e1)
+                append(&world.area_events,AreaEvent{kind=.EXIT, area=e2, entity=e1})
+            }
+        }
+    }
+}
+
 collision_resolution_system :: proc(world: ^World) {
     for ev in world.collision_events {
         resolve_collision(world, ev.a, ev.b, ev.normal)
     }
 }
 
-// collision_system :: proc(world: ^World) {
-//     for e1 in world.positions {
-//         has_vel := e1 in world.velocities
-//         if !has_vel do continue
-//         has_e := e1 in world.elasticities
-//         if !has_e do continue
-//         imass1, has_imass := world.inv_mass[e1]
-//         if !has_imass do continue
-//         has_size := e1 in world.sizes
-//         if !has_size do continue
-//         for e2 in world.positions {
-//             if e2 <= e1 do continue
-//             has_vel := e2 in world.velocities
-//             if !has_vel do continue
-//             has_e := e2 in world.elasticities
-//             if !has_e do continue
-//             imass2, has_imass := world.inv_mass[e2]
-//             if !has_imass || (imass1==0 && imass2==0) do continue
-//             has_size := e2 in world.sizes
-//             if !has_size do continue
-//         }
-//     }
-// }
+point_system :: proc(world: ^World) {
+    for ev in world.area_events {
+        if ev.kind != .ENTER do continue
+        if ev.entity in world.playables && ev.area in world.points {
+            append(&world.deletion_events, DeletionEvent{ev.area})
+            append(&world.spawn_events, SpawnEvent{kind=.Coin, pos={cast(f32)rl.GetRandomValue(-220,220),cast(f32)rl.GetRandomValue(-220,220)}})
+            world.point += 1
+        }
+    }
+}
 
 lifetime_system :: proc(world: ^World) {
     for e, lt in world.lifetimes {
@@ -305,6 +316,7 @@ predator_system :: proc(world: ^World) {
         world.velocities[e1] = e1vel
     }
 }
+
 input_system :: proc(world: ^World) {
     for e, input in world.playables {
         vel, has_vel := world.velocities[e]
@@ -320,20 +332,17 @@ input_system :: proc(world: ^World) {
 }
 
 render_system :: proc(world: ^World) {
-    center_x, center_y := f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)
+    center := vec2{f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)}
     for e, &pos in world.positions {
         size, has_size := world.sizes[e]
         color, has_color := world.colors[e]
         if !has_size do continue
         if !has_color do continue
 
-        rl.DrawRectangleV(pos+{center_x,center_y},size,rl.Color(color))
-
-        // vel, has_vel := world.velocities[e]
-        // if has_vel {
-        //     rl.DrawLineEx(pos+(size*0.5),pos+vel,5,rl.GREEN)
-        // }
+        rl.DrawRectangleV(pos+center,size,rl.Color(color))
     }
+    t := rl.TextFormat("%d", world.point)
+    rl.DrawText(t, i32(center.x)-rl.MeasureText(t, 40)/2, i32(center.y)-310, 40, rl.RAYWHITE)
 }
 
 gameover_system :: proc(world: ^World) {
@@ -370,6 +379,8 @@ spawn_system :: proc(world: ^World) {
             spawn_enemy(world,ev.target)
         case .Square:
             spawn_square(world,ev.pos,ev.size,ev.vel,ev.inv_mass)
+        case .Coin:
+            spawn_coin(world,ev.pos)
         }
     }
 }
@@ -384,4 +395,5 @@ clear_system :: proc(world: ^World) {
     clear(&world.collision_events)
     clear(&world.spawn_events)
     clear(&world.deletion_events)
+    clear(&world.area_events)
 }

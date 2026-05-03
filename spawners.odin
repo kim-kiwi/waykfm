@@ -18,6 +18,20 @@ spawn_debris ::proc(world: ^World, pos, size, vel: vec2, color: rgba, gravity: f
     return e
 }
 
+spawn_coin :: proc(world: ^World, pos: vec2, point: u8 = 1) -> Entity {
+    e := entity_create(world)
+    world.positions[e] = pos
+    world.sizes[e] = {25,25}
+    world.colors[e] = get_rgba(0xffff00ff)
+    world.collidables[e] = true
+    world.areas[e] = Area {
+        min = {0,0},
+        max = {25,25},
+    }
+    world.points[e] = point
+    return e
+}
+
 spawn_square :: proc(world: ^World, pos, size: vec2, vel: vec2 = {0,0}, inv_mass: f32 = 1.0) -> Entity {
     e := entity_create(world)
     world.positions[e] = pos
@@ -32,8 +46,8 @@ spawn_square :: proc(world: ^World, pos, size: vec2, vel: vec2 = {0,0}, inv_mass
 }
 
 spawn_player :: proc(world: ^World) -> Entity{
-    plr = entity_create(world)
-    world.positions[plr] = {95,95}
+    plr := entity_create(world)
+    world.positions[plr] = {200,200}
     world.velocities[plr] = {0,0}
     world.elasticities[plr] = 0.5
     world.frictions[plr] = 0.1
@@ -46,9 +60,9 @@ spawn_player :: proc(world: ^World) -> Entity{
 }
 
 spawn_enemy :: proc(world: ^World, plr: Entity) -> Entity {
-    enemy = entity_create(world)
+    enemy := entity_create(world)
     // world.positions[enemy] = {-240,-240}
-    world.positions[enemy] = {-100,-100}
+    world.positions[enemy] = {-250,-250}
     world.velocities[enemy] = {100,100}
     world.elasticities[enemy] = 0.5
     world.frictions[enemy] = 0.1

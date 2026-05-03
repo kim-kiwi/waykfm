@@ -15,6 +15,7 @@ SpawnKind :: enum {
     Player,
     Enemy,
     Square,
+    Coin,
 }
 SpawnEvent :: struct {
     kind: SpawnKind,
@@ -31,8 +32,21 @@ LifeTime :: struct {
     born_at: f64,
     duration: f64,
 }
+Area :: struct {
+    min: vec2,
+    max: vec2,
+    hit: map[Entity]bool,
+}
+AreaEventKind :: enum { ENTER, EXIT }
+AreaEvent :: struct {
+    kind: AreaEventKind,
+    area: Entity,
+    entity: Entity,
+}
 
 World :: struct {
+    point: i32,
+
     next_entity: Entity,
     entities: map[Entity]bool,
 
@@ -54,8 +68,11 @@ World :: struct {
 
     collidables: map[Entity]bool,
     lifetimes: map[Entity]LifeTime,
+    areas: map[Entity]Area,
+    points: map[Entity]u8,
 
     collision_events: [dynamic]CollisionEvent,
     spawn_events: [dynamic]SpawnEvent,
     deletion_events: [dynamic]DeletionEvent,
+    area_events: [dynamic]AreaEvent,
 }
