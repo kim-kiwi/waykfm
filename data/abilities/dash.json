@@ -1,0 +1,10 @@
+{
+    "name": "Dash",
+    "effects": [
+        {
+            "type": "unlock_skill",
+            "target": "player",
+            "skill": "dash"
+        }
+    ]
+}

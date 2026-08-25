@@ -1,0 +1,13 @@
+{
+    "id": "dash",
+    "symbol": "Da",
+    "name": "Dash",
+    "type": "active",
+    "effects": [
+        {
+            "type": "apply_impulse",
+            "entity": "player",
+            "value": 1000
+        }
+    ]
+}

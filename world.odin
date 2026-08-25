@@ -5,6 +5,10 @@ import "core:slice/heap"
 PredatorComp :: struct {
     target: Entity,
 }
+PlayableComp :: struct {
+    direction: vec2,
+    unlocked_skills: [dynamic]SkillId,
+}
 
 CollisionEvent :: struct {
     a: Entity,
@@ -29,8 +33,8 @@ DeletionEvent :: struct {
     entity: Entity,
 }
 LifeTime :: struct {
-    born_at: f64,
-    duration: f64,
+    born_at: f32,
+    duration: f32,
 }
 Area :: struct {
     min: vec2,
@@ -44,15 +48,33 @@ AreaEvent :: struct {
     entity: Entity,
 }
 
+PointEvent :: struct { pt: i32 }
+
+WorldState :: enum {
+    InGame,
+    GUI_Ability,
+}
+StateEvent :: struct {
+    next: WorldState
+}
+
 World :: struct {
+    state: WorldState,
+    plr: Entity,
+
     point: i32,
+    abilities: []Ability,
+    skills: map[SkillId]Skill,
+    gametime: f32,
 
     next_entity: Entity,
     entities: map[Entity]bool,
 
     gameover: bool,
-    gameover_end_at: f64,
+    gameover_end_at: f32,
     should_restart: bool,
+
+    should_powerup_count: i32,
 
     positions: map[Entity]vec2,
     velocities: map[Entity]vec2,
@@ -62,7 +84,7 @@ World :: struct {
 
     sizes: map[Entity]vec2,
     colors: map[Entity]rgba,
-    playables: map[Entity]bool,
+    playables: map[Entity]PlayableComp,
     predators: map[Entity]PredatorComp,
     gravities: map[Entity]f32,
 
@@ -70,9 +92,12 @@ World :: struct {
     lifetimes: map[Entity]LifeTime,
     areas: map[Entity]Area,
     points: map[Entity]u8,
+    speeds: map[Entity]f32,
 
     collision_events: [dynamic]CollisionEvent,
     spawn_events: [dynamic]SpawnEvent,
     deletion_events: [dynamic]DeletionEvent,
     area_events: [dynamic]AreaEvent,
+    point_events: [dynamic]PointEvent,
+    state_events: [dynamic]StateEvent,
 }

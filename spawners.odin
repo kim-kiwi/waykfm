@@ -12,7 +12,7 @@ spawn_debris ::proc(world: ^World, pos, size, vel: vec2, color: rgba, gravity: f
     world.colors[e] = color
     world.gravities[e] = gravity
     world.lifetimes[e] = {
-        born_at=rl.GetTime(),
+        born_at=world.gametime,
         duration=5,
     }
     return e
@@ -54,8 +54,9 @@ spawn_player :: proc(world: ^World) -> Entity{
     world.inv_mass[plr] = 1.0/(1.0) // 1/mass
     world.sizes[plr] = {50,50}
     world.colors[plr] = {255,255,255,255}
-    world.playables[plr] = true
+    world.playables[plr] = {}
     world.collidables[plr] = true
+    world.speeds[plr] = 175
     return plr
 }
 
@@ -71,5 +72,6 @@ spawn_enemy :: proc(world: ^World, plr: Entity) -> Entity {
     world.colors[enemy] = {255,0,0,255}
     world.predators[enemy] = {target=plr}
     world.collidables[enemy] = true
+    world.speeds[enemy] = 250
     return enemy
 }

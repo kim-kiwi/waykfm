@@ -1,0 +1,12 @@
+{
+    "name": "Fast",
+    "effects": [
+        {
+            "type": "modify_stat",
+            "method": "add",
+            "entity": "player",
+            "target": "speed",
+            "value": 100.0
+        }
+    ]
+}

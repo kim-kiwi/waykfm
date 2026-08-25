@@ -1,0 +1,19 @@
+{
+    "name": "FastSmall",
+    "effects": [
+        {
+            "type": "modify_stat",
+            "method": "add",
+            "entity": "player",
+            "target": "speed",
+            "value": 100.0
+        },
+        {
+            "type": "modify_stat",
+            "method": "multiply",
+            "entity": "player",
+            "target": "size",
+            "value": 0.5
+        }
+    ]
+}

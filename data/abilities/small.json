@@ -1,0 +1,12 @@
+{
+    "name": "Small",
+    "effects": [
+        {
+            "type": "modify_stat",
+            "method": "multiply",
+            "entity": "player",
+            "target": "size",
+            "value": 0.5
+        }
+    ]
+}

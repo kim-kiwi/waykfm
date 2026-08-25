@@ -4,6 +4,7 @@ import "core:math"
 import "core:math/rand"
 import rl "vendor:raylib"
 import "core:fmt"
+import "core:strings"
 
 abs_f32 :: proc(v: f32) -> f32 {
     if v < 0 do return -v
@@ -202,13 +203,26 @@ point_system :: proc(world: ^World) {
             append(&world.deletion_events, DeletionEvent{ev.area})
             append(&world.spawn_events, SpawnEvent{kind=.Coin, pos={cast(f32)rl.GetRandomValue(-245,220),cast(f32)rl.GetRandomValue(-245,220)}})
             world.point += 1
+            append(&world.point_events, PointEvent{world.point})
         }
+    }
+}
+
+powerup_system :: proc(world: ^World) {
+    for ev in world.point_events {
+        if ev.pt%5 == 0 {
+            world.should_powerup_count += 1
+        }
+    }
+    if world.should_powerup_count > 0 {
+        world.should_powerup_count -= 1
+        append(&world.state_events, StateEvent{.GUI_Ability})
     }
 }
 
 lifetime_system :: proc(world: ^World) {
     for e, lt in world.lifetimes {
-        if rl.GetTime()-lt.born_at>=lt.duration do append(&world.deletion_events, DeletionEvent{e})
+        if world.gametime-lt.born_at>=lt.duration do append(&world.deletion_events, DeletionEvent{e})
     }
 }
 
@@ -300,35 +314,113 @@ predator_system :: proc(world: ^World) {
         if !has_pos do continue
         e1vel, has_vel := world.velocities[e1]
         if !has_vel do continue
+        e1speed, has_speed := world.speeds[e1]
+        if !has_speed do continue
 
         e2 := predator.target
         e2pos, e2has_pos := world.positions[e2]
         if !e2has_pos do continue
         e2vel, e2has_vel := world.velocities[e2]
         if !e2has_vel do continue
-        e1vel += rl.Vector2Normalize(e2pos-e1pos)*250*rl.GetFrameTime()
+        e1vel += rl.Vector2Normalize(e2pos-e1pos)*e1speed*rl.GetFrameTime()
 
         world.velocities[e1] = e1vel
     }
 }
 
-input_system :: proc(world: ^World) {
-    for e, input in world.playables {
+playable_system :: proc(world: ^World) {
+    for e, &playable in world.playables {
         vel, has_vel := world.velocities[e]
         if !has_vel do continue
+        speed, has_speed := world.speeds[e]
+        if !has_speed do continue
         movement: vec2
         if rl.IsKeyDown(.A) do movement.x-=1
         if rl.IsKeyDown(.D) do movement.x+=1
         if rl.IsKeyDown(.W) do movement.y-=1
         if rl.IsKeyDown(.S) do movement.y+=1
-        vel += rl.Vector2Normalize(movement)*175*rl.GetFrameTime()
+        playable.direction = rl.Vector2Normalize(movement)
+        vel += playable.direction*speed*rl.GetFrameTime()
         world.velocities[e] = vel
+
+        if rl.IsKeyPressed(.H) && len(playable.unlocked_skills)>0 {
+            for untyped_effect in world.skills[playable.unlocked_skills[0]].effects {
+                do_effect(world, untyped_effect)
+            }
+        }
     }
 }
 
-// gui_system :: proc(world: ^World) {
+selected: int = 0
+gui_system :: proc(world: ^World) {
+    center := vec2{f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)}
+    if rl.IsKeyPressed(.W) do selected = math.max(selected-1,0)
+    if rl.IsKeyPressed(.S) do selected = math.min(selected+1,len(world.abilities)-1)
+    offset := vec2{0,0}
+    start_pos := vec2{250+WALL_WIDTH,-250-WALL_WIDTH}
+    left_pad: f32 = 10
+    for ability, i in world.abilities {
+        // ability
+        pos := start_pos+offset
+        rl.DrawRectangleV(pos+center,{1000,50}, i == selected ? rl.GRAY : rl.BLANK)
+        pos.y+=10
+        rl.DrawText(rl.TextFormat("%s",ability.name), i32(pos.x+center.x+left_pad), i32(pos.y+center.y), 30, rl.RAYWHITE)
+        offset.y+=55
+    }
+    offset.y-=5
+    rl.DrawRectangleV(start_pos+offset+center,{1000,2}, rl.ORANGE)
+    offset.y+=20
+    for untyped_effect in world.abilities[selected].effects {
+        pos := start_pos+offset
+        switch effect in untyped_effect {
+        case ApplyImpulseEffect:
+            rl.DrawText(rl.TextFormat("Apply impulse %v", effect.impulse),i32(pos.x+center.x+left_pad),i32(pos.y+center.y), 30, rl.RAYWHITE)
+        case UnlockSkillEffect:
+            rl.DrawText(rl.TextFormat("Unlock [%v]", effect.skill),i32(pos.x+center.x+left_pad),i32(pos.y+center.y), 30, rl.RAYWHITE)
+        case ModifyStatEffect:
+            text: cstring
+            switch effect.method {
+            case .Set:
+                text = rl.TextFormat("set %v to %v",effect.target,effect.value)
+            case .Add:
+                text = rl.TextFormat("+%v %v",effect.value,effect.target)
+            case .Mult:
+                text = rl.TextFormat("x%v %v",effect.value,effect.target)
+            }
+            rl.DrawText(text,i32(pos.x+center.x+left_pad),i32(pos.y+center.y), 30, rl.RAYWHITE)
+        }
+        offset.y+=55
+    }
+    if rl.IsKeyPressed(.SPACE) {
+        append(&world.state_events, StateEvent{.InGame})
+        for untyped_effect in world.abilities[selected].effects {
+            do_effect(world, untyped_effect)
+        }
+    }
+}
 
-// }
+version_system :: proc() {
+    center := vec2{f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)}
+    FONT_SIZE :: 40
+    w := cast(f32)rl.MeasureText("v0.1.0", FONT_SIZE)*0.5
+    rl.DrawText("v0.1.0", i32(center.x-w), i32(center.y-FONT_SIZE*0.5), FONT_SIZE, rl.Fade(rl.RAYWHITE,0.025))
+}
+
+skill_icon_system :: proc(world: ^World) {
+    if !(world.plr in world.playables) do return
+    center := vec2{f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)}
+    offset := vec2{0,250+WALL_WIDTH+10}
+
+    FONT_SIZE :: 30
+    offset.x-=f32(len(world.playables[world.plr].unlocked_skills)*55)/2
+    for skill_id in world.playables[world.plr].unlocked_skills {
+        rl.DrawRectangleLinesEx({offset.x+center.x,offset.y+center.y, 50,50}, 4, rl.RAYWHITE)
+        text := rl.TextFormat("%v",world.skills[skill_id].symbol)
+        w := f32(rl.MeasureText(text,FONT_SIZE))*0.5
+        rl.DrawText(text,i32(offset.x+center.x-w+25),i32(offset.y+center.y)+10, FONT_SIZE, rl.RAYWHITE)
+        offset+={55,0}
+    }
+}
 
 render_system :: proc(world: ^World) {
     center := vec2{f32(rl.GetScreenWidth()/2), f32(rl.GetScreenHeight()/2)}
@@ -342,6 +434,18 @@ render_system :: proc(world: ^World) {
     }
     t := rl.TextFormat("%d", world.point)
     rl.DrawText(t, i32(center.x)-rl.MeasureText(t, 40)/2, i32(center.y)-310, 40, rl.RAYWHITE)
+}
+
+state_event_system :: proc(world: ^World) {
+    delete_list: [dynamic]int
+    defer delete(delete_list)
+    #reverse for ev, i in world.state_events {
+        if world.state != ev.next {
+            world.state = ev.next
+            append(&delete_list, i)
+        }
+    }
+    for i in delete_list do ordered_remove(&world.state_events, i)
 }
 
 gameover_system :: proc(world: ^World) {
@@ -359,14 +463,18 @@ gameover_system :: proc(world: ^World) {
             }
 
             world.gameover=true
-            world.gameover_end_at=rl.GetTime()
+            world.gameover_end_at=world.gametime
         }
     }
     if world.gameover {
-        if rl.GetTime() - world.gameover_end_at > 1 {
+        if world.gametime - world.gameover_end_at > 1 {
             world.should_restart=true
         }
     }
+}
+
+gametime_system :: proc(world: ^World) {
+    world.gametime+=rl.GetFrameTime()
 }
 
 spawn_system :: proc(world: ^World) {
@@ -393,4 +501,9 @@ clear_system :: proc(world: ^World) {
     clear(&world.spawn_events)
     clear(&world.deletion_events)
     clear(&world.area_events)
+    clear(&world.point_events)
+}
+force_clear_system :: proc(world: ^World) {
+    clear_system(world)
+    clear(&world.state_events)
 }
